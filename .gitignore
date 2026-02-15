@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.venv/
+venv/
+env/
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Data — keep structure, ignore user-specific files
+data/uploads/*.csv
+data/uploads/*.zip
+data/.garmin_tokens/
+data/synced/*
+!data/synced/.gitkeep
+data/profile.yaml
+data/summaries/*.md
+!data/uploads/.gitkeep
+!data/samples/.gitkeep
+!data/summaries/.gitkeep
+
+# Legacy (safe to remove once fully cleaned)
+frontend/
+backend/

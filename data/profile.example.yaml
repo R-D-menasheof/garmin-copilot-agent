@@ -1,0 +1,52 @@
+# Vitalis — User Profile
+# Copy this file to data/profile.yaml and fill in your details.
+# Auto-synced fields are updated automatically by scripts/sync.py.
+
+# ── Manual fields (fill these in) ──────────────────────────────────────
+
+name: ""                    # Your name
+age: 0                      # Age in years (can be decimal, e.g., 36.5)
+sex: ""                     # Male / Female / Other
+height_cm: 0                # Height in centimeters
+
+# Goals — what are you working toward?
+# Examples:
+#   - Lose weight to 85 kg
+#   - Sleep 7+ hours consistently
+#   - Improve VO2max above 40
+#   - Swim 1500m non-stop
+goals: []
+
+# Active injuries or physical limitations
+# Examples:
+#   - Lower back pain
+#   - Knee tendinitis
+#   - Shoulder impingement
+injuries: []
+
+# Dietary preferences
+# Examples:
+#   - Vegetarian
+#   - Intermittent fasting (16:8)
+#   - High protein
+#   - No special preferences
+dietary_preferences: []
+
+# Anything else the agent should know
+# Examples:
+#   - 3 cups of coffee daily, last one at 2pm
+#   - Shift work schedule
+#   - High-stress job
+#   - Takes beta blockers (affects heart rate)
+notes: ""
+
+# ── Auto-synced fields (updated by sync.py) ────────────────────────────
+
+weight_kg: null
+body_fat_pct: null
+bmi: null
+vo2max: null
+fitness_age: null
+resting_heart_rate: null
+devices: []
+last_synced: null
