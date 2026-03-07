@@ -180,6 +180,7 @@ def create_default_profile(path: str | Path | None = None) -> dict[str, Any]:
         "injuries": [],
         "dietary_preferences": [],
         "notes": "",
+        "current_medications": [],
         # Auto-synced from Garmin (populated by update_from_garmin)
         "weight_kg": None,
         "body_fat_pct": None,

@@ -40,6 +40,39 @@ dietary_preferences: []
 #   - Takes beta blockers (affects heart rate)
 notes: ""
 
+# Current medications (update when prescriptions change)
+# Examples:
+#   - name: Atorvastatin
+#     dosage: 20mg
+#     frequency: daily
+#     since: 2025-06-01
+#   - name: Eltroxin
+#     dosage: 50mcg
+#     frequency: daily
+#     since: 2024-01-15
+current_medications: []
+
+# Supplements (not prescribed, self-administered)
+# Examples:
+#   - name: Vitamin D
+#     dosage: 1000 IU
+#     timing: morning
+#     since: 2026-01-01
+#   - name: Magnesium
+#     dosage: 400mg
+#     timing: evening
+#     since: 2026-03-01
+supplements: []
+
+# Health log — timestamped personal notes
+# Record lifestyle changes, symptoms, events the agent should know about
+# Examples:
+#   - date: 2026-03-01
+#     note: Started intermittent fasting 16:8
+#   - date: 2026-02-15
+#     note: Knee pain after running, switching to swimming
+health_log: []
+
 # ── Auto-synced fields (updated by sync.py) ────────────────────────────
 
 weight_kg: null

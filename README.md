@@ -44,6 +44,7 @@ After every analysis, Copilot writes a summary to `data/summaries/`. Before the 
 ## Features
 
 - **30+ Garmin data types** — steps, sleep (with stages), HRV, Body Battery, VO2max, training readiness, stress, SpO2, activities, weight, respiration, intensity minutes, personal records, and more
+- **Medical records** — import blood tests, doctor visits, imaging reports, prescriptions, and vaccination records (PDF, HTML, TXT); auto-extract text and cross-reference with fitness data
 - **Interactive MFA** — handles Garmin's 2FA seamlessly in the terminal
 - **Agent memory** — summaries with `context_for_next_run` provide continuity across sessions
 - **Hebrew health reports** — comprehensive analysis in Hebrew with English technical terms (VO2max, HRV, etc.)
@@ -149,6 +150,7 @@ The `.github/skills/` directory teaches Copilot how to work with your data:
 | Health Recommendations | `health-recommendations.md` | Priority scale, categories, personalisation rules |
 | Compare Days | `compare-days.md` | Day-level metric comparison |
 | Garmin CSV Analysis | `garmin-csv-analysis.md` | Manual CSV upload parsing rules |
+| Medical Records | `medical-records.md` | Medical record management, lab reference ranges, cross-referencing |
 
 ---
 
@@ -159,22 +161,25 @@ garmin-copilot-agent/
 ├── src/vitalis/               # Core Python package
 │   ├── garmin_client.py       # Garmin Connect API (auth, MFA, 30+ types)
 │   ├── data_store.py          # Save raw JSON to date-stamped folders
+│   ├── medical_store.py       # Medical record import, extraction, indexing
 │   ├── profile.py             # User profile (YAML) management
 │   ├── summary_store.py       # Agent memory — read/write summaries
 │   └── models.py              # Pydantic models
 ├── scripts/
 │   ├── sync.py                # CLI sync with interactive MFA
+│   ├── import_medical.py      # Import medical documents
 │   ├── extract_metrics.py     # Structured metric extraction
 │   └── compare_days.py        # Day-level comparison
-├── tests/                     # pytest tests (101 passing)
+├── tests/                     # pytest tests (126 passing)
 ├── data/
 │   ├── profile.yaml           # Your profile (gitignored)
 │   ├── synced/                # Raw Garmin data (gitignored)
+│   ├── medical/               # Medical records (gitignored)
 │   ├── summaries/             # Agent memory (gitignored)
 │   └── samples/               # Sample data for development
 ├── .github/
 │   ├── copilot-instructions.md    # Agent behavior rules
-│   └── skills/                    # 9 skill definitions
+│   └── skills/                    # 10 skill definitions
 ├── pyproject.toml             # Package config
 ├── .env.example               # Credential template
 ├── data/profile.example.yaml  # Profile template
@@ -204,6 +209,28 @@ python scripts/compare_days.py 2026-02-13 2026-02-14
 python scripts/compare_days.py 2026-02-13 2026-02-14 --json
 python scripts/compare_days.py 2026-02-13 --folder 2026-01-19_to_2026-02-15
 ```
+
+### Import Medical Records
+
+Import medical documents (PDF, HTML, TXT) for cross-referencing with Garmin data:
+
+```bash
+# Import a blood test PDF
+python scripts/import_medical.py --file ~/Downloads/blood_test.pdf --category blood_test --date 2026-03-01 --title "Lipid Panel"
+
+# Import a doctor visit summary
+python scripts/import_medical.py --file report.html --category doctor_visit --date 2026-03-01 --title "Annual Checkup"
+
+# Import with auto-detected title from filename
+python scripts/import_medical.py --file ~/Downloads/cbc_results.pdf --category blood_test
+
+# Rebuild the index after manual file placement
+python scripts/import_medical.py --rebuild-index
+```
+
+Categories: `blood_test`, `doctor_visit`, `imaging`, `prescription`, `vaccination`
+
+Documents are stored in `data/medical/` (gitignored). Text is auto-extracted from PDFs and HTML files. The agent cross-references lab values with Garmin fitness data during analysis.
 
 ---
 
@@ -244,6 +271,7 @@ All data stays on your machine:
 - **Credentials** (`.env`) — gitignored, never committed
 - **OAuth tokens** (`data/.garmin_tokens/`) — gitignored
 - **Health data** (`data/synced/`) — gitignored
+- **Medical records** (`data/medical/`) — gitignored
 - **Profile** (`data/profile.yaml`) — gitignored
 - **Analysis summaries** (`data/summaries/`) — gitignored
 
@@ -257,7 +285,7 @@ Nothing is sent to any server except Garmin's own API (for data sync).
 pytest tests/ -q
 ```
 
-All 101 tests cover: Garmin client auth/MFA, data store, profile management, summary store, sync CLI, metric extraction (39 tests), and day comparison (12 tests).
+All 126 tests cover: Garmin client auth/MFA, data store, profile management, summary store, sync CLI, metric extraction (39 tests), day comparison (12 tests), and medical records (25 tests).
 
 ---
 
@@ -270,6 +298,9 @@ All 101 tests cover: Garmin client auth/MFA, data store, profile management, sum
 | pydantic | ≥2.0 |
 | pyyaml | ≥6.0 |
 | python-dotenv | ≥1.0 |
+| pymupdf | ≥1.24 |
+| beautifulsoup4 | ≥4.12 |
+| lxml | ≥5.0 |
 | VS Code + GitHub Copilot | Latest |
 
 ---

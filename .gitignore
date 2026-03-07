@@ -34,16 +34,31 @@ Thumbs.db
 desktop.ini
 
 # Data — keep structure, ignore user-specific files
-data/uploads/*.csv
-data/uploads/*.zip
+data/uploads/*
+!data/uploads/.gitkeep
 data/.garmin_tokens/
+data/.tessdata/
 data/synced/*
 !data/synced/.gitkeep
 data/profile.yaml
 data/summaries/*.md
-!data/uploads/.gitkeep
 !data/samples/.gitkeep
 !data/summaries/.gitkeep
+
+# Medical records — all personal documents ignored
+data/medical/blood_tests/*
+data/medical/doctor_visits/*
+data/medical/imaging/*
+data/medical/prescriptions/*
+data/medical/vaccinations/*
+data/medical/index.json
+data/medical/context.md
+!data/medical/.gitkeep
+!data/medical/blood_tests/.gitkeep
+!data/medical/doctor_visits/.gitkeep
+!data/medical/imaging/.gitkeep
+!data/medical/prescriptions/.gitkeep
+!data/medical/vaccinations/.gitkeep
 
 # Legacy (safe to remove once fully cleaned)
 frontend/

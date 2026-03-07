@@ -1,0 +1,17 @@
+{
+  "category": "blood_tests",
+  "date": "2026-01-15",
+  "title": "Complete Blood Count",
+  "language": "en",
+  "source_file": "blood_tests/2026-01-15_complete-blood-count/original.pdf",
+  "extracted_text": "Complete Blood Count (CBC)\n\nWBC: 6.5 x10^3/uL (Ref: 4.5-11.0)\nRBC: 5.2 x10^6/uL (Ref: 4.7-6.1)\nHemoglobin: 15.1 g/dL (Ref: 14.0-18.0)\nHematocrit: 44.5% (Ref: 42-52)\nPlatelets: 245 x10^3/uL (Ref: 150-400)\nMCV: 85.6 fL (Ref: 80-100)\nMCH: 29.0 pg (Ref: 27-33)",
+  "parsed_values": {
+    "WBC": {"value": 6.5, "unit": "x10^3/uL", "reference": "4.5-11.0"},
+    "RBC": {"value": 5.2, "unit": "x10^6/uL", "reference": "4.7-6.1"},
+    "Hemoglobin": {"value": 15.1, "unit": "g/dL", "reference": "14.0-18.0"},
+    "Hematocrit": {"value": 44.5, "unit": "%", "reference": "42-52"},
+    "Platelets": {"value": 245.0, "unit": "x10^3/uL", "reference": "150-400"}
+  },
+  "tags": ["cbc", "routine"],
+  "notes": ""
+}

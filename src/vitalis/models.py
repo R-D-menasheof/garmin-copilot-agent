@@ -3,8 +3,54 @@
 from __future__ import annotations
 
 from datetime import date
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
+
+
+# ── Medical Records ────────────────────────────────────────────────
+
+
+class MedicalCategory(StrEnum):
+    """Categories of medical documents."""
+
+    BLOOD_TEST = "blood_tests"
+    DOCTOR_VISIT = "doctor_visits"
+    IMAGING = "imaging"
+    PRESCRIPTION = "prescriptions"
+    VACCINATION = "vaccinations"
+
+
+class ParsedLabValue(BaseModel):
+    """A single parsed lab result value."""
+
+    value: float
+    unit: str
+    reference: str = ""
+
+
+class MedicalRecord(BaseModel):
+    """Metadata and extracted content for a single medical document."""
+
+    category: MedicalCategory
+    date: date
+    title: str
+    language: str = Field(default="auto", description="'he', 'en', or 'auto'")
+    source_file: str = Field(..., description="Relative path to original file")
+    extracted_text: str = ""
+    parsed_values: dict[str, ParsedLabValue] = Field(default_factory=dict)
+    tags: list[str] = Field(default_factory=list)
+    notes: str = ""
+
+
+class MedicalIndex(BaseModel):
+    """Master index of all imported medical records."""
+
+    records: list[MedicalRecord] = Field(default_factory=list)
+    last_updated: str = ""
+
+
+# ── Health Analysis ────────────────────────────────────────────────
 
 
 class HealthRecommendation(BaseModel):

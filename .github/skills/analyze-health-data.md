@@ -14,13 +14,16 @@ Vitalis uses an **agent-first** analysis model. The GitHub Copilot agent reads r
 2. Pay special attention to the `context_for_next_run` field — this is what past-you asked you to track
 3. Note previous `metrics_snapshot` values — you will compare against them to show trends (↑↓→)
 4. Note previous recommendations — did the user follow them? Did the metrics improve?
+5. Read `data/medical/context.md` if it exists — this contains the persistent medical summary, active recommendations, and follow-up questions to ask the user
 
 ### Phase 2 — Data (קריאת נתונים)
 
-1. Read `data/profile.yaml` — know the user's goals, injuries, metrics, notes
+1. Read `data/profile.yaml` — know the user's goals, injuries, metrics, notes, current medications, supplements, and health_log entries
 2. Run `python scripts/extract_metrics.py` — this extracts a structured summary of ALL key metrics from the latest sync. Read its output.
 3. If you need deeper detail on specific data types (e.g., day-by-day sleep breakdown, individual activity details), read the relevant JSON files from the latest `data/synced/` folder
 4. Read `meta.json` in the sync folder to know which data types are available
+5. Check `data/medical/index.json` for medical records — if recent blood tests, doctor visits, or prescriptions exist, read their `extracted_text` and `parsed_values`. Cross-reference lab values with Garmin metrics (see `medical-records.md` skill for reference ranges and cross-referencing rules)
+6. Check `current_medications` in the profile — account for medication effects on Garmin metrics (e.g., beta blockers lower RHR/HRV)
 
 ### Phase 3 — Report (כתיבת דו"ח)
 
