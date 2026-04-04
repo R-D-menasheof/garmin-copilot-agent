@@ -1,3 +1,8 @@
+---
+name: personal-profile
+description: "User profile fields, YAML structure, how to use for personalisation. Goals, injuries, medications, supplements, dietary preferences, health log. Use when: reading or updating user profile, personalising recommendations."
+---
+
 # Skill: Personal Profile
 
 ## Overview

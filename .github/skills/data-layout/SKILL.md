@@ -1,3 +1,8 @@
+---
+name: data-layout
+description: "Vitalis data directory structure. File formats, folder conventions, actual Garmin JSON structures (daily_stats, sleep, HRV, training_readiness, weigh_ins, etc.). Use when: reading raw data, understanding file structure, locating data files."
+---
+
 # Skill: Data Layout
 
 ## Overview

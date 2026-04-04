@@ -1,3 +1,8 @@
+---
+name: agent-memory
+description: "Vitalis agent memory protocol. Summary format, vitalis-meta JSON block, context_for_next_run field, memory continuity across sessions. Use when: writing summaries, reading previous analysis, maintaining analysis continuity."
+---
+
 # Skill: Agent Memory
 
 ## Overview

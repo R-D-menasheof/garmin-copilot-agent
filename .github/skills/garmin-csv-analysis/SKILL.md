@@ -1,3 +1,9 @@
+---
+name: garmin-csv-analysis
+description: "Parsing rules for manually uploaded Garmin CSV files. Column mappings, date formats, unit conversions. Use when: user uploads CSV export from Garmin Connect website."
+disable-model-invocation: true
+---
+
 # Skill: Garmin CSV Analysis
 
 ## Overview

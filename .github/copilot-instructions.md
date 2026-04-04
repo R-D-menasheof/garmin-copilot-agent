@@ -2,7 +2,36 @@
 
 ## What is Vitalis?
 
-Vitalis is your **personal health & fitness adviser** — the best adviser for כושר (fitness), תזונה (nutrition), בריאות (health), sleep, and recovery. It syncs 30+ data types from Garmin Connect and stores them locally. **You** (the Copilot agent) are the analysis engine — you read the raw data, the user profile, and previous summaries to produce personalised insights.
+Vitalis is your **personal health & fitness adviser** — a multi-agent system for כושר (fitness), תזונה (nutrition), בריאות (health), sleep, and recovery. It syncs 30+ data types from Garmin Connect, stores them locally, and uses a team of specialized AI agents to analyze, advise, and track health over time.
+
+## Agent Architecture
+
+Vitalis uses a **coordinator + specialist** multi-agent pattern:
+
+```
+@vitalis (coordinator) → routes user intent to:
+├── health-analyst    — Weekly/daily health reports, trend analysis
+├── data-syncer       — Garmin sync, medical document imports
+├── profile-manager   — Goals, medications, supplements, health log
+├── nutrition-coach   — Calorie targets, macros, supplements, diet advice
+├── fitness-coach     — Workout plans, training protocols, VO2max
+└── health-consultant — Lab interpretation, sleep protocols, recovery
+```
+
+**Agents** live in `.github/agents/`. **Skills** provide domain knowledge in `.github/skills/*/SKILL.md`. **Prompts** enable one-click workflows in `.github/prompts/`. **Instructions** enforce rules via `.github/instructions/`. **Hooks** automate lifecycle events via `.github/hooks/`.
+
+### Key Prompts
+
+| Prompt            | What it does                                              |
+| ----------------- | --------------------------------------------------------- |
+| `/weekly-review`  | Full weekly analysis: sync → analyze → report → questions |
+| `/daily-check`    | Quick daily health check                                  |
+| `/sync-garmin`    | Sync latest Garmin data                                   |
+| `/compare-days`   | Compare specific days side by side                        |
+| `/meal-plan`      | Personalized nutrition advice                             |
+| `/training-plan`  | Weekly workout plan                                       |
+| `/explain-labs`   | Blood test interpretation                                 |
+| `/import-medical` | Import medical document                                   |
 
 ## Core Principles
 
@@ -58,14 +87,14 @@ Vitalis builds health records over time using a summary-based memory system:
 - Each summary contains human-readable Markdown AND a `vitalis-meta` JSON block
 - **Never skip the summary step** — it's what gives you memory across sessions
 
-### 5. Analysis Workflow (4 Phases)
+### 5. Analysis Workflow
 
-When the user asks for health analysis, follow this interactive 4-phase workflow:
+The analysis workflow is defined in the `health-analyst` agent and the `analyze-health-data` skill. The 4-phase workflow:
 
-1. **Phase 1 — Context (קריאת הקשר)**: Read latest `data/summaries/*.md` — extract `context_for_next_run` and `metrics_snapshot` for trend comparison. Also read `data/medical/context.md` for persistent medical summary, active recommendations, and follow-up questions.
-2. **Phase 2 — Data (קריאת נתונים)**: Read `data/profile.yaml` (including `supplements`, `health_log`, `current_medications`), run `python scripts/extract_metrics.py` for structured metrics. For day-level comparisons, use `python scripts/compare_days.py` with specific dates. Read individual JSON files for deeper detail. Also check `data/medical/index.json` for recent medical records — read extracted text and cross-reference lab values with Garmin data.
-3. **Phase 3 — Report (כתיבת דו"ח)**: Generate the report **immediately** — do not wait for user answers. Write a comprehensive **Hebrew** health report with English technical terms. Include daily-level highlights, health science explanations, trend comparisons with ↑↓→ arrows, and up to 7 prioritised recommendations. Write summary to `data/summaries/YYYY-MM-DD.md`.
-4. **Phase 4 — Clarify & Update (שאלות ועדכון)**: Ask the user questions **in Hebrew** about missing profile info or data anomalies. When they answer, update `data/profile.yaml` and revise the summary if the answers materially change the analysis.
+1. **Phase 1 — Context**: Read latest summary's `context_for_next_run` for continuity
+2. **Phase 2 — Data**: Read profile + run extraction scripts + read medical records
+3. **Phase 3 — Report**: Generate Hebrew report immediately, consulting nutrition/fitness/health agents for recommendations
+4. **Phase 4 — Clarify & Update**: Ask user follow-up questions, update profile and summary if needed
 
 ### 6. Report Language
 
@@ -114,7 +143,8 @@ garmin-copilot-agent/
 │   ├── sync.py            # CLI sync (with interactive MFA)
 │   ├── import_medical.py  # Import medical documents
 │   ├── extract_metrics.py # Structured metric extraction helper
-│   └── compare_days.py    # Day-level comparison helper
+│   ├── compare_days.py    # Day-level comparison helper
+│   └── check_freshness.py # Data freshness check (for hooks)
 ├── tests/                 # pytest tests
 ├── data/
 │   ├── profile.yaml       # User profile (gitignored)
@@ -124,7 +154,18 @@ garmin-copilot-agent/
 │   └── samples/           # Dev sample data
 ├── .github/
 │   ├── copilot-instructions.md  # This file
-│   └── skills/                  # Agent skill definitions
+│   ├── agents/                  # Custom agent definitions
+│   │   ├── vitalis.agent.md     # Main coordinator
+│   │   ├── health-analyst.agent.md
+│   │   ├── data-syncer.agent.md
+│   │   ├── profile-manager.agent.md
+│   │   ├── nutrition-coach.agent.md
+│   │   ├── fitness-coach.agent.md
+│   │   └── health-consultant.agent.md
+│   ├── prompts/                 # One-click workflows
+│   ├── skills/                  # Domain knowledge (*/SKILL.md)
+│   ├── instructions/            # Always-on rules (*.instructions.md)
+│   └── hooks/                   # Lifecycle automation
 ├── pyproject.toml         # Package config + dependencies
 ├── .env.example           # Credential template
 └── data/profile.example.yaml  # Profile template
@@ -132,16 +173,15 @@ garmin-copilot-agent/
 
 ## Skills
 
-Agent skill definitions are in `.github/skills/`. **Read these before performing domain tasks:**
+Agent skills live in `.github/skills/*/SKILL.md`. They are loaded on-demand based on their `description` field:
 
-- `fetch-garmin-data.md` — How to sync data, all 30+ data types, CLI usage
-- `analyze-health-data.md` — Full analysis workflow, metrics, domains, recommendations
-- `write-summary.md` — Summary format, writing rules, memory protocol
-- `compare-days.md` — Day-level comparison script usage and output fields
-- `personal-profile.md` — Profile fields, how to use for personalisation
-- `data-layout.md` — File/folder structure, how to find and read data
-- `agent-memory.md` — Summary format and memory protocol (detailed)
-- `garmin-csv-analysis.md` — CSV parsing rules (for manual uploads)
-- `garmin-data-sync.md` — ~~DEPRECATED~~ — see `fetch-garmin-data.md`
-- `health-recommendations.md` — Recommendation categories and priority scale
-- `medical-records.md` — Medical record management, lab reference ranges, cross-referencing
+- `analyze-health-data` — Full analysis workflow, metrics, domains, recommendations
+- `fetch-garmin-data` — How to sync data, all 30+ data types, CLI usage
+- `write-summary` — Summary format, writing rules, memory protocol
+- `compare-days` — Day-level comparison script usage and output fields
+- `personal-profile` — Profile fields, how to use for personalisation
+- `data-layout` — File/folder structure, how to find and read data
+- `agent-memory` — Summary format and memory protocol (detailed)
+- `health-recommendations` — Recommendation categories and priority scale
+- `medical-records` — Medical record management, lab reference ranges, cross-referencing
+- `garmin-csv-analysis` — CSV parsing rules (for manual uploads)

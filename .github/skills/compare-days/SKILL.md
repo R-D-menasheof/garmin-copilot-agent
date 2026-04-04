@@ -1,3 +1,8 @@
+---
+name: compare-days
+description: "Day-level comparison using scripts/compare_days.py. Extracts daily stats, sleep, HRV, activities, training readiness, stress for specific dates. Use when: comparing specific days, investigating anomalies, day-over-day changes."
+---
+
 # Skill: Compare Days
 
 ## Overview
@@ -40,27 +45,33 @@ python scripts/compare_days.py 2026-02-14 --folder 2026-01-19_to_2026-02-15
 For each date, the script extracts:
 
 ### Daily Stats (from `daily_stats.json`)
+
 - Steps, calories (total + active), resting HR
 - Stress (avg + max), Body Battery (high + low)
 - Floors climbed, distance
 
 ### Sleep (from `sleep.json`)
+
 - Duration (hours), sleep score
 - Stage breakdown: deep, REM, light, awake (minutes)
 - SpO2 average during sleep
 
 ### HRV (from `hrv.json`)
+
 - Nightly average, status
 - Baseline values
 
 ### Activities (from `activities.json`)
+
 - Type, duration, calories, distance
 - Average + max heart rate
 
 ### Training Readiness (from `training_readiness.json`)
+
 - Score and level
 
 ### Stress Detail (from `stress.json`)
+
 - Overall score, rest score
 - Stress distribution percentages (low/medium/high)
 

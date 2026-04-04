@@ -1,3 +1,8 @@
+---
+name: write-summary
+description: "Summary file format, writing rules, vitalis-meta JSON block structure, fields, context_for_next_run guidelines. Use when: writing analysis summaries to data/summaries/."
+---
+
 # Skill: Write Summary
 
 ## Overview

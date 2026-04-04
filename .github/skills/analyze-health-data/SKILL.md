@@ -1,3 +1,8 @@
+---
+name: analyze-health-data
+description: "Full health analysis workflow — 4 phases (context, data, report, clarify). Metrics domains (fitness, sleep, recovery, body composition, nutrition, general health). Recommendation rules, key metrics reference ranges, report format. Use when: health analysis, weekly review, trend comparison, generating health reports."
+---
+
 # Skill: Analyze Health Data
 
 ## Overview

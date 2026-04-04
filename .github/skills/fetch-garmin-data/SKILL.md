@@ -1,3 +1,8 @@
+---
+name: fetch-garmin-data
+description: "How to sync Garmin Connect data. 30+ data types, CLI usage (sync.py), MFA handling, data storage format. Use when: syncing data, understanding available data types, troubleshooting sync issues."
+---
+
 # Skill: Fetch Garmin Data
 
 ## Overview
@@ -17,6 +22,24 @@ python scripts/sync.py --from 2026-01-01 --to 2026-01-31  # Date range
 
 On first run, Garmin may require MFA — the script will prompt you
 to enter the verification code sent to your email.
+
+### 429 Workaround — Browser Auth
+
+Since March 2026, Garmin is blocking programmatic SSO login via Cloudflare (returns 429 for all garth/garminconnect users globally). Browser login still works. Use the Playwright-based workaround:
+
+```bash
+# One-time setup
+pip install playwright requests-oauthlib
+playwright install chromium
+
+# Run browser auth — opens Chromium, you login manually
+python scripts/browser_auth.py
+
+# Then sync normally — uses saved tokens, no SSO login needed
+python scripts/sync.py --days 14
+```
+
+The browser auth script saves OAuth tokens to `data/.garmin_tokens/`. `sync.py` picks them up automatically (Phase 1 token-based login). Tokens typically last until they expire or Garmin revokes them.
 
 ## Available Data Types (30+)
 

@@ -1,3 +1,8 @@
+---
+name: health-recommendations
+description: "Recommendation categories, priority scale (P1-P5), formatting rules, maximum 7 recommendations per analysis. Use when: generating health recommendations, prioritizing advice."
+---
+
 # Skill: Health Recommendations
 
 ## Overview

@@ -1,0 +1,12 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "python scripts/check_freshness.py",
+        "windows": "backend\\.venv\\Scripts\\python.exe scripts\\check_freshness.py",
+        "timeout": 10
+      }
+    ]
+  }
+}
