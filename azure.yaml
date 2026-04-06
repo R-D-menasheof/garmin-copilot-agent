@@ -1,0 +1,17 @@
+name: vitalis
+metadata:
+  template: vitalis-api
+services:
+  api:
+    project: ./api
+    language: python
+    host: function
+    hooks:
+      prepackage:
+        shell: sh
+        run: |
+          cp -r ../src/vitalis ./vitalis
+infra:
+  provider: bicep
+  path: ./infra
+  module: main
