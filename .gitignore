@@ -11,6 +11,7 @@ build/
 .venv/
 venv/
 env/
+mobile/.dart_tool/
 .pytest_cache/
 .coverage
 htmlcov/
@@ -20,6 +21,9 @@ htmlcov/
 .env
 .env.local
 .env.*.local
+
+# Azure Functions local secrets
+api/local.settings.json
 
 # IDE
 .vscode/settings.json
@@ -59,6 +63,19 @@ data/medical/context.md
 !data/medical/imaging/.gitkeep
 !data/medical/prescriptions/.gitkeep
 !data/medical/vaccinations/.gitkeep
+
+# Local artifacts
+%TEMP%/
+tmp-api-deploy/
+tmp-*.zip
+
+# OneDrive conflict copies
+*-CPC-*.py
+*-CPC-*.dart
+*-CPC-*.md
+*-CPC-*.xml
+*-CPC-*.kt
+*-CPC-*.flutter-plugins-dependencies
 
 # Legacy (safe to remove once fully cleaned)
 frontend/
