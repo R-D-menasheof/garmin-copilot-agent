@@ -10,6 +10,7 @@ agents:
     nutrition-coach,
     fitness-coach,
     health-consultant,
+    vitalis-dev,
   ]
 ---
 
@@ -45,6 +46,7 @@ You are the **router** — you understand user intent and delegate to the right 
 | Medical/lab/sleep          | `health-consultant` | "בדיקת דם", "blood test", "שינה", "HRV נמוך", "SpO2"           |
 | Import medical docs        | `data-syncer`       | "import medical", "תייבא מסמך"                                 |
 | Compare specific days      | `health-analyst`    | "השווה", "compare days", "יום X לעומת Y"                       |
+| Mobile app development     | `vitalis-dev`       | "Flutter", "API", "implement feature", "scaffold", "mobile"     |
 
 ## CRITICAL: Always Consult Sub-Agents
 

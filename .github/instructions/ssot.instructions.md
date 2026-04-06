@@ -19,6 +19,11 @@ Each data concern has **exactly one owning module**. Never duplicate logic.
 | Medical import CLI       | `scripts/import_medical.py`    | Import medical documents                      |
 | Metric extraction        | `scripts/extract_metrics.py`   | Structured metric extraction from synced data |
 | Day comparison           | `scripts/compare_days.py`      | Day-level metric extraction and comparison    |
+| Cloud data (Blob)        | `api/shared/blob_store.py`     | Azure Blob Storage ops (meals, goals, cache)  |
+| External food DBs        | `api/shared/food_lookup.py`    | Open Food Facts + USDA + fuzzy match          |
+| LLM food analysis        | `api/shared/vision.py`         | Azure OpenAI vision + NLP food parsing        |
+| Nutrition read CLI       | `scripts/read_nutrition.py`    | External Agent reads combined nutrition data  |
+| Goal setting CLI         | `scripts/set_goals.py`         | External Agent sets weekly nutrition goals    |
 
 ## Rules
 
