@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:provider/provider.dart';
 
+import '../models/recommendation_status.dart';
+import '../providers/recommendation_provider.dart';
 import '../providers/summary_provider.dart';
+import '../widgets/trend_chart.dart';
 
 class WeeklyReviewScreen extends StatefulWidget {
   const WeeklyReviewScreen({super.key});
@@ -15,57 +19,266 @@ class _WeeklyReviewScreenState extends State<WeeklyReviewScreen> {
   void initState() {
     super.initState();
     Future.microtask(() {
-      context.read<SummaryProvider>().loadSummaryHistory(limit: 6);
+      final provider = context.read<SummaryProvider>();
+      if (provider.latestSummary == null) {
+        provider.loadLatestSummary();
+      }
+      if (provider.summaryHistory.isEmpty) {
+        provider.loadSummaryHistory(limit: 6);
+      }
+      context.read<RecommendationProvider>().loadStatuses();
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final summaryProvider = context.watch<SummaryProvider>();
-    final history = summaryProvider.summaryHistory;
+    final latest = summaryProvider.latestSummary;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('סקירה שבועית')),
-      body: summaryProvider.loading && history.isEmpty
-          ? const Center(child: CircularProgressIndicator())
-          : history.isEmpty
-              ? const Center(child: Text('אין עדיין סקירות זמינות'))
-              : ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: history.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final summary = history[index];
-                    return Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              summary.date.toIso8601String().split('T').first,
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 8),
-                            for (final trend in summary.trends) ...[
-                              Text(trend),
-                              const SizedBox(height: 4),
-                            ],
-                            if (summary.recommendations.isNotEmpty) ...[
-                              const SizedBox(height: 8),
-                              Text(
-                                summary.recommendations.first.title,
-                                style: Theme.of(context).textTheme.bodyLarge,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(summary.recommendations.first.detail),
-                            ],
-                          ],
-                        ),
-                      ),
-                    );
-                  },
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('סקירה שבועית'),
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: 'משימות'),
+              Tab(text: 'דוח'),
+              Tab(text: 'מגמות'),
+            ],
+          ),
+        ),
+        body: summaryProvider.loading && latest == null
+            ? const Center(child: CircularProgressIndicator())
+            : latest == null
+                ? const Center(child: Text('אין עדיין סקירות זמינות'))
+                : TabBarView(
+                    children: [
+                      _TodoTab(summary: latest),
+                      _ReportTab(summary: latest),
+                      const _TrendsTab(),
+                    ],
+                  ),
+      ),
+    );
+  }
+}
+
+class _TodoTab extends StatelessWidget {
+  final dynamic summary;
+  const _TodoTab({required this.summary});
+
+  @override
+  Widget build(BuildContext context) {
+    final allRecs = summary.recommendations as List;
+    if (allRecs.isEmpty) {
+      return const Center(child: Text('אין המלצות'));
+    }
+
+    final actionItems = allRecs.where((r) => r.priority < 5).toList();
+    final achievements = allRecs.where((r) => r.priority == 5).toList();
+    final recProvider = context.watch<RecommendationProvider>();
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        if (actionItems.isNotEmpty) ...[
+          Text('משימות', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          for (final rec in actionItems)
+            _buildActionItem(context, rec, recProvider),
+        ],
+        if (achievements.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          Text('הישגים ✨', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          for (final rec in achievements)
+            _buildAchievement(context, rec),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildActionItem(BuildContext context, dynamic rec, RecommendationProvider recProvider) {
+    final recId = RecommendationStatus.generateId(rec.category, rec.title);
+    final status = recProvider.getStatus(recId);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Dismissible(
+        key: Key(recId),
+        background: Container(
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.only(left: 20),
+          color: Colors.green.withAlpha(40),
+          child: const Icon(Icons.check, color: Colors.green),
+        ),
+        secondaryBackground: Container(
+          alignment: Alignment.centerRight,
+          padding: const EdgeInsets.only(right: 20),
+          color: Colors.orange.withAlpha(40),
+          child: const Icon(Icons.snooze, color: Colors.orange),
+        ),
+        confirmDismiss: (direction) async {
+          if (direction == DismissDirection.startToEnd) {
+            await recProvider.markDone(recId);
+          } else {
+            await recProvider.markSnoozed(recId);
+          }
+          return false;
+        },
+        child: Card(
+          color: status == RecStatus.done
+              ? Colors.green.withAlpha(20)
+              : status == RecStatus.snoozed
+                  ? Colors.orange.withAlpha(20)
+                  : null,
+          child: ListTile(
+            leading: Checkbox(
+              value: status == RecStatus.done,
+              onChanged: (val) {
+                if (val == true) {
+                  recProvider.markDone(recId);
+                } else {
+                  recProvider.markPending(recId);
+                }
+              },
+            ),
+            title: Text(
+              rec.title,
+              style: status == RecStatus.done
+                  ? const TextStyle(decoration: TextDecoration.lineThrough)
+                  : null,
+            ),
+            subtitle: Text(rec.detail),
+            trailing: _priorityBadge(rec.priority),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAchievement(BuildContext context, dynamic rec) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Card(
+        color: Colors.green.withAlpha(15),
+        child: ListTile(
+          leading: const Text('🏆', style: TextStyle(fontSize: 24)),
+          title: Text(rec.title),
+          subtitle: Text(rec.detail),
+        ),
+      ),
+    );
+  }
+
+  Widget _priorityBadge(int priority) {
+    final color = priority <= 2
+        ? Colors.red
+        : priority <= 3
+            ? Colors.orange
+            : Colors.green;
+    return CircleAvatar(
+      radius: 14,
+      backgroundColor: color.withAlpha(40),
+      child: Text(
+        'P$priority',
+        style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+}
+
+class _ReportTab extends StatefulWidget {
+  final dynamic summary;
+  const _ReportTab({required this.summary});
+
+  @override
+  State<_ReportTab> createState() => _ReportTabState();
+}
+
+class _ReportTabState extends State<_ReportTab> {
+  int _selectedIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final summaryProvider = context.watch<SummaryProvider>();
+    final history = summaryProvider.summaryHistory;
+    final current = _selectedIndex < history.length
+        ? history[_selectedIndex]
+        : widget.summary;
+    final md = (current.reportMarkdown as String?) ?? '';
+
+    return Column(
+      children: [
+        if (history.length > 1)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: DropdownButton<int>(
+              value: _selectedIndex,
+              isExpanded: true,
+              items: [
+                for (int i = 0; i < history.length; i++)
+                  DropdownMenuItem(
+                    value: i,
+                    child: Text(
+                      '${history[i].date.toIso8601String().split('T').first}'
+                      '  (${history[i].periodStart.toIso8601String().split('T').first}'
+                      ' → ${history[i].periodEnd.toIso8601String().split('T').first})',
+                    ),
+                  ),
+              ],
+              onChanged: (val) => setState(() => _selectedIndex = val ?? 0),
+            ),
+          ),
+        Expanded(
+          child: md.isEmpty
+              ? const Center(child: Text('אין דוח זמין'))
+              : Directionality(
+                  textDirection: TextDirection.rtl,
+                  child: Markdown(data: md),
                 ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TrendsTab extends StatelessWidget {
+  const _TrendsTab();
+
+  static const _chartConfig = [
+    ('avg_sleep_hours', 'שינה', 'שעות', Colors.indigo),
+    ('avg_resting_hr', 'RHR', 'bpm', Colors.red),
+    ('avg_hrv_nightly', 'HRV', 'ms', Colors.teal),
+    ('weight_kg', 'משקל', 'ק"ג', Colors.brown),
+    ('avg_daily_steps', 'צעדים', 'ממוצע', Colors.green),
+    ('avg_body_battery_peak', 'Body Battery', 'שיא', Colors.orange),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final summaryProvider = context.watch<SummaryProvider>();
+    final trends = summaryProvider.extractTrendData();
+
+    final hasData = trends.values.any((list) => list.isNotEmpty);
+    if (!hasData) {
+      return const Center(child: Text('בקרוב'));
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        for (final (metric, title, unit, color) in _chartConfig)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: TrendChart(
+              title: title,
+              unit: unit,
+              color: color,
+              data: trends[metric] ?? [],
+            ),
+          ),
+      ],
     );
   }
 }

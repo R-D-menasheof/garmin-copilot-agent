@@ -32,6 +32,7 @@ from vitalis.models import (
     MealTemplate,
     NutritionGoal,
     PlanDay,
+    RecommendationStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -258,6 +259,26 @@ class BlobStore:
                 continue
             summaries.append(AnalysisSummary.model_validate_json(raw))
         return summaries
+
+    # ── Recommendation Status ───────────────────────────────────────
+
+    def save_recommendation_statuses(self, statuses: list[RecommendationStatus]) -> None:
+        """Persist recommendation adoption statuses."""
+        data = json.dumps(
+            [s.model_dump(mode="json") for s in statuses],
+            ensure_ascii=False,
+        )
+        self._upload("recommendations/status.json", data)
+
+    def load_recommendation_statuses(self) -> list[RecommendationStatus]:
+        """Load recommendation adoption statuses."""
+        raw = self._download("recommendations/status.json")
+        if raw is None:
+            return []
+        items = json.loads(raw)
+        return [RecommendationStatus.model_validate(item) for item in items]
+
+    # ── Combined (External Agent) ──────────────────────────────────
 
     # ── Combined (External Agent) ──────────────────────────────────
 

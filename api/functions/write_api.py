@@ -19,6 +19,8 @@ from vitalis.models import (
     MealTemplate,
     NutritionGoal,
     PlanDay,
+    RecStatus,
+    RecommendationStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -226,3 +228,38 @@ def post_summary(req) -> "HttpResponse":
     store = _get_blob_store()
     store.save_summary(summary)
     return _ok({"status": "ok", "summary": summary.model_dump(mode="json")})
+
+
+def post_recommendation_status(req) -> "HttpResponse":
+    """POST /api/v1/recommendations/status — update a recommendation's adoption status."""
+    if not verify_api_key(req):
+        return _error("Unauthorized", 401)
+
+    try:
+        body = json.loads(req.get_body())
+        rec_id = body["rec_id"]
+        status_str = body["status"]
+        status = RecStatus(status_str)
+    except (json.JSONDecodeError, KeyError, ValueError) as e:
+        return _error(f"Invalid request: {e}")
+
+    store = _get_blob_store()
+    statuses = store.load_recommendation_statuses()
+
+    from datetime import datetime as dt
+
+    updated = False
+    for s in statuses:
+        if s.rec_id == rec_id:
+            s.status = status
+            s.updated_at = dt.now()
+            updated = True
+            break
+
+    if not updated:
+        statuses.append(
+            RecommendationStatus(rec_id=rec_id, status=status, updated_at=dt.now())
+        )
+
+    store.save_recommendation_statuses(statuses)
+    return _ok({"status": "ok", "rec_id": rec_id, "new_status": status_str})

@@ -122,7 +122,8 @@ The `vitalis-meta` JSON block stays **in English** — it's machine-readable for
   },
   "trends": [...],
   "recommendations": [...],
-  "context_for_next_run": "..."
+  "context_for_next_run": "...",
+  "report_markdown": ""
 }
 ```
 ````
@@ -137,7 +138,8 @@ The `vitalis-meta` JSON block stays **in English** — it's machine-readable for
 6. **Include daily-level highlights** — flag specific best/worst days, not just averages
 7. **Each recommendation must explain WHY** — 1-2 sentences of health science
 8. **Compare to previous summary** — every metric should show ↑↓→ vs last report
-9. **Context for next run** must include:
+9. **Recommendations in vitalis-meta must be in Hebrew** — `title` and `detail` fields in the JSON `recommendations` array must be Hebrew text (matching the report). Only `category` stays English.
+10. **Context for next run** must include:
    - Metric baselines (e.g., "HRV baseline 29ms", "RHR baseline 64 bpm")
    - Specific things to track (e.g., "Did sleep improve toward 7h?")
    - Open questions (e.g., "Short nights cluster on weekends — schedule issue?")
@@ -146,6 +148,7 @@ The `vitalis-meta` JSON block stays **in English** — it's machine-readable for
 11. **Priority 1-5** (1 = critical, 5 = positive reinforcement)
 12. **Hebrew prose** with English technical terms (VO2max, HRV, BB, SpO2, REM, RHR, BMI)
 13. **Long and detailed** — the report should be comprehensive, include explanations, not a brief summary
+14. **Publish to mobile app** — after saving the summary, run `python scripts/publish_summary.py --date YYYY-MM-DD` to push it to the API. The script reads the raw `.md` file and includes it as `report_markdown` in the API payload so the mobile app can render the full Hebrew report.
 
 ## How to Write Programmatically
 

@@ -19,7 +19,7 @@ sys.path.insert(0, str(_project_root / "scripts"))
 
 from vitalis.models import AnalysisSummary, HealthRecommendation
 
-from publish_summary import parse_args, publish_summary, send_summary
+from publish_summary import parse_args, publish_summary, publish_all, send_summary
 
 
 def _summary(day: date = date(2026, 4, 4)) -> AnalysisSummary:
@@ -49,6 +49,28 @@ class TestParseArgs:
     def test_date_is_optional(self) -> None:
         args = parse_args([])
         assert args.date is None
+
+    def test_parses_all_flag(self) -> None:
+        args = parse_args(["--all"])
+        assert args.all is True
+
+    def test_all_defaults_false(self) -> None:
+        args = parse_args([])
+        assert args.all is False
+
+
+class TestPublishAll:
+    @patch("publish_summary.publish_summary", return_value={"status": "ok"})
+    @patch("publish_summary.SummaryStore")
+    def test_publishes_all_dates(self, mock_store_cls, mock_pub) -> None:
+        store = MagicMock()
+        store.list_dates.return_value = [date(2026, 3, 20), date(2026, 3, 27)]
+        mock_store_cls.return_value = store
+
+        results = publish_all(api_url="http://localhost:7071/api", api_key="test-key")
+
+        assert len(results) == 2
+        assert mock_pub.call_count == 2
 
 
 class TestSendSummary:
@@ -112,3 +134,41 @@ class TestPublishSummary:
         assert result["status"] == "ok"
         store.load_by_date.assert_called_once_with(date(2026, 4, 3))
         mock_send.assert_called_once()
+
+    @patch("publish_summary.send_summary", return_value={"status": "ok"})
+    @patch("publish_summary.SummaryStore")
+    def test_includes_report_markdown_from_md_file(self, mock_store_cls, mock_send) -> None:
+        """publish_summary should read the raw .md file and include it as report_markdown."""
+        import tempfile
+
+        md_content = "# דו\"ח בריאות\n\nתוכן בעברית..."
+        with tempfile.TemporaryDirectory() as tmpdir:
+            md_path = Path(tmpdir) / "2026-04-04.md"
+            md_path.write_text(md_content, encoding="utf-8")
+
+            store = MagicMock()
+            store.load_latest.return_value = _summary()
+            store.directory = Path(tmpdir)
+            mock_store_cls.return_value = store
+
+            publish_summary(api_url="http://localhost:7071/api", api_key="test-key")
+
+        sent_summary = mock_send.call_args.args[0]
+        assert sent_summary.report_markdown == md_content
+
+    @patch("publish_summary.send_summary", return_value={"status": "ok"})
+    @patch("publish_summary.SummaryStore")
+    def test_sends_empty_markdown_when_md_file_missing(self, mock_store_cls, mock_send) -> None:
+        """If the .md file doesn't exist, report_markdown should be empty."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = MagicMock()
+            store.load_latest.return_value = _summary()
+            store.directory = Path(tmpdir)
+            mock_store_cls.return_value = store
+
+            publish_summary(api_url="http://localhost:7071/api", api_key="test-key")
+
+        sent_summary = mock_send.call_args.args[0]
+        assert sent_summary.report_markdown == ""

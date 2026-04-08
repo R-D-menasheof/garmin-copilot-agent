@@ -20,6 +20,7 @@ Vitalis uses an **agent-first** analysis model. The GitHub Copilot agent reads r
 3. Note previous `metrics_snapshot` values — you will compare against them to show trends (↑↓→)
 4. Note previous recommendations — did the user follow them? Did the metrics improve?
 5. Read `data/medical/context.md` if it exists — this contains the persistent medical summary, active recommendations, and follow-up questions to ask the user
+6. Run `python scripts/read_recommendation_status.py` to check which recommendations the user marked as done/snoozed in the mobile app. Use this to track adoption in your report.
 
 ### Phase 2 — Data (קריאת נתונים)
 

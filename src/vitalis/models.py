@@ -224,3 +224,34 @@ class AnalysisSummary(BaseModel):
     context_for_next_run: str = Field(
         ..., description="Free-text context the agent should read next time"
     )
+    report_markdown: str = Field(
+        default="", description="Full Hebrew report markdown from the summary file"
+    )
+
+
+# ── Recommendation Tracking ───────────────────────────────────────
+
+
+class RecStatus(StrEnum):
+    """Status of a tracked recommendation."""
+
+    PENDING = "pending"
+    DONE = "done"
+    SNOOZED = "snoozed"
+
+
+class RecommendationStatus(BaseModel):
+    """Tracks whether a user adopted, snoozed, or ignored a recommendation."""
+
+    rec_id: str = Field(..., description="SHA-256 hash of category+title")
+    status: RecStatus = RecStatus.PENDING
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+    @classmethod
+    def from_recommendation(cls, rec: HealthRecommendation) -> "RecommendationStatus":
+        """Create a pending status entry from a recommendation."""
+        import hashlib
+
+        key = f"{rec.category}:{rec.title}"
+        rec_id = hashlib.sha256(key.encode()).hexdigest()[:16]
+        return cls(rec_id=rec_id)

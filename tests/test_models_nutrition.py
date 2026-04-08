@@ -12,12 +12,16 @@ import pytest
 from pydantic import ValidationError
 
 from vitalis.models import (
+    AnalysisSummary,
     BiometricsRecord,
     DailyNutritionLog,
+    HealthRecommendation,
     KnownFood,
     MealEntry,
     NutritionGoal,
     NutritionSource,
+    RecStatus,
+    RecommendationStatus,
 )
 
 
@@ -194,3 +198,109 @@ class TestKnownFood:
         assert restored.calories_per_100g == 89
         assert restored.source == NutritionSource.USDA
         assert restored.aliases == []
+
+
+# ── AnalysisSummary ───────────────────────────────────────────────
+
+
+def _summary(**overrides) -> AnalysisSummary:
+    """Factory for a minimal AnalysisSummary."""
+    defaults = dict(
+        date=date(2026, 4, 4),
+        period_start=date(2026, 3, 28),
+        period_end=date(2026, 4, 4),
+        metrics_snapshot={"avg_daily_steps": 9000},
+        trends=["Steps improving"],
+        recommendations=[
+            HealthRecommendation(
+                category="sleep",
+                title="Extend sleep to 7h",
+                detail="Average 6.3h — below target",
+                priority=1,
+            ),
+        ],
+        context_for_next_run="HRV baseline 29ms",
+    )
+    defaults.update(overrides)
+    return AnalysisSummary(**defaults)
+
+
+class TestAnalysisSummaryReportMarkdown:
+    def test_report_markdown_defaults_empty(self) -> None:
+        summary = _summary()
+        assert summary.report_markdown == ""
+
+    def test_report_markdown_roundtrip(self) -> None:
+        md = "# דו\"ח בריאות\n\nתוכן בעברית..."
+        summary = _summary(report_markdown=md)
+        data = summary.model_dump(mode="json")
+        restored = AnalysisSummary.model_validate(data)
+        assert restored.report_markdown == md
+
+    def test_backward_compatible_without_report_markdown(self) -> None:
+        """Existing JSON without report_markdown should still parse."""
+        data = _summary().model_dump(mode="json")
+        data.pop("report_markdown", None)
+        restored = AnalysisSummary.model_validate(data)
+        assert restored.report_markdown == ""
+
+
+# ── RecommendationStatus ─────────────────────────────────────────
+
+
+class TestRecStatus:
+    def test_enum_values(self) -> None:
+        assert RecStatus.PENDING == "pending"
+        assert RecStatus.DONE == "done"
+        assert RecStatus.SNOOZED == "snoozed"
+
+
+class TestRecommendationStatus:
+    def test_creation(self) -> None:
+        status = RecommendationStatus(
+            rec_id="abc123",
+            status=RecStatus.PENDING,
+            updated_at=datetime(2026, 4, 4, 12, 0),
+        )
+        assert status.rec_id == "abc123"
+        assert status.status == RecStatus.PENDING
+
+    def test_rejects_invalid_status(self) -> None:
+        with pytest.raises(ValidationError):
+            RecommendationStatus(
+                rec_id="abc",
+                status="invalid",
+                updated_at=datetime(2026, 4, 4),
+            )
+
+    def test_from_recommendation_generates_stable_id(self) -> None:
+        rec = HealthRecommendation(
+            category="sleep",
+            title="Extend sleep to 7h",
+            detail="...",
+            priority=1,
+        )
+        status = RecommendationStatus.from_recommendation(rec)
+        assert status.rec_id  # non-empty
+        assert status.status == RecStatus.PENDING
+
+        # Same rec → same id (stable)
+        status2 = RecommendationStatus.from_recommendation(rec)
+        assert status.rec_id == status2.rec_id
+
+    def test_different_recs_different_ids(self) -> None:
+        rec_a = HealthRecommendation(category="sleep", title="A", detail="", priority=1)
+        rec_b = HealthRecommendation(category="fitness", title="B", detail="", priority=2)
+        assert RecommendationStatus.from_recommendation(rec_a).rec_id != \
+               RecommendationStatus.from_recommendation(rec_b).rec_id
+
+    def test_json_roundtrip(self) -> None:
+        status = RecommendationStatus(
+            rec_id="abc123",
+            status=RecStatus.DONE,
+            updated_at=datetime(2026, 4, 4, 12, 0),
+        )
+        data = status.model_dump(mode="json")
+        restored = RecommendationStatus.model_validate(data)
+        assert restored.rec_id == "abc123"
+        assert restored.status == RecStatus.DONE

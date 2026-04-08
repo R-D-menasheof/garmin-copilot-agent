@@ -84,12 +84,15 @@ Each data concern has **exactly one owning module**. Never duplicate logic.
 | LLM food analysis        | `api/shared/vision.py`         | Azure OpenAI vision + NLP food parsing        |
 | Nutrition read CLI       | `scripts/read_nutrition.py`    | External Agent reads combined nutrition data  |
 | Goal setting CLI         | `scripts/set_goals.py`         | External Agent sets weekly nutrition goals    |
+| Summary publishing CLI   | `scripts/publish_summary.py`   | Push summaries (with report_markdown) to API  |
+| Rec status read CLI      | `scripts/read_recommendation_status.py` | Agent reads recommendation adoption status |
 
 ### 4. Agent Memory Protocol
 
 Vitalis builds health records over time using a summary-based memory system:
 
 - **After every analysis**, write a `data/summaries/YYYY-MM-DD.md` file
+- **After writing**, publish to mobile app: run `python scripts/publish_summary.py --date YYYY-MM-DD`
 - **Before every analysis**, read the latest summary's `context_for_next_run` field
 - The `context_for_next_run` is free-text context you should read for continuity
 - Each summary contains human-readable Markdown AND a `vitalis-meta` JSON block

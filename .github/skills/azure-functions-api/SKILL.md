@@ -18,6 +18,9 @@ The Vitalis API is a set of Azure Functions (V4 Python programming model) that s
 | GET | `/api/v1/nutrition` | `from`, `to` (YYYY-MM-DD) | `{meals: {date: [MealEntry]}}` | Mobile, External Agent |
 | GET | `/api/v1/biometrics` | `from`, `to` (YYYY-MM-DD) | `{biometrics: {date: BiometricsRecord}}` | Mobile, External Agent |
 | GET | `/api/v1/combined` | `from`, `to` (YYYY-MM-DD) | `{nutrition: {...}, biometrics: {...}}` | External Agent (weekly) |
+| GET | `/api/v1/summary/latest` | — | `{summary: AnalysisSummary \| null}` | Mobile |
+| GET | `/api/v1/summary/history` | `limit` (default 4) | `{summaries: [AnalysisSummary]}` | Mobile |
+| GET | `/api/v1/recommendations/status` | — | `{statuses: [RecommendationStatus]}` | Mobile (Phase 2) |
 
 ### Write API (`api/functions/write_api.py`)
 
@@ -25,6 +28,8 @@ The Vitalis API is a set of Azure Functions (V4 Python programming model) that s
 |--------|----------|------|----------|----------|
 | POST | `/api/v1/meals` | `MealEntry` | `{status: "ok", meal: MealEntry}` | Mobile |
 | POST | `/api/v1/goals` | `NutritionGoal` | `{status: "ok", goal: NutritionGoal}` | External Agent, Mobile |
+| POST | `/api/v1/summary` | `AnalysisSummary` | `{status: "ok", summary: AnalysisSummary}` | External Agent (publish_summary.py) |
+| POST | `/api/v1/recommendations/status` | `{rec_id, status}` | `{status: "ok"}` | Mobile (Phase 2) |
 
 ### Ingestion API (`api/functions/ingestion.py`)
 

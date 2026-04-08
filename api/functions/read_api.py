@@ -217,3 +217,13 @@ def get_summary_history(req) -> "HttpResponse":
     store = _get_blob_store()
     summaries = store.load_summary_history(limit=limit)
     return _ok({"summaries": [summary.model_dump(mode="json") for summary in summaries]})
+
+
+def get_recommendation_statuses(req) -> "HttpResponse":
+    """GET /api/v1/recommendations/status — return recommendation adoption statuses."""
+    if not verify_api_key(req):
+        return _error("Unauthorized", 401)
+
+    store = _get_blob_store()
+    statuses = store.load_recommendation_statuses()
+    return _ok({"statuses": [s.model_dump(mode="json") for s in statuses]})

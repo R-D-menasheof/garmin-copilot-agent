@@ -9,6 +9,7 @@ import '../models/meal_template.dart';
 import '../models/plan_day.dart';
 import '../models/nutrition_goal.dart';
 import '../models/biometrics_record.dart';
+import '../models/recommendation_status.dart';
 
 /// HTTP client for the Vitalis Azure Functions API.
 class ApiClient {
@@ -298,6 +299,30 @@ class ApiClient {
     _checkResponse(resp);
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
     return PlanDay.fromJson(body['plan'] as Map<String, dynamic>);
+  }
+
+  // ── Recommendation Status ────────────────────────────────
+
+  Future<List<RecommendationStatus>> getRecommendationStatuses() async {
+    final uri = Uri.parse('$baseUrl/v1/recommendations/status');
+    final resp = await _httpClient.get(uri, headers: _headers);
+    _checkResponse(resp);
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    final statuses = body['statuses'];
+    if (statuses == null) return <RecommendationStatus>[];
+    return (statuses as List)
+        .map((item) => RecommendationStatus.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> postRecommendationStatus(String recId, RecStatus status) async {
+    final uri = Uri.parse('$baseUrl/v1/recommendations/status');
+    final resp = await _httpClient.post(
+      uri,
+      headers: _headers,
+      body: jsonEncode({'rec_id': recId, 'status': status.name}),
+    );
+    _checkResponse(resp);
   }
 
   // ── Helpers ──────────────────────────────────────────────

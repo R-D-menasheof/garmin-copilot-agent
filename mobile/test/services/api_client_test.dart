@@ -6,6 +6,7 @@ import 'package:http/testing.dart';
 import 'package:vitalis/services/api_client.dart';
 import 'package:vitalis/models/meal_entry.dart';
 import 'package:vitalis/models/nutrition_source.dart';
+import 'package:vitalis/models/recommendation_status.dart';
 
 void main() {
   group('ApiClient', () {
@@ -107,6 +108,39 @@ void main() {
         () => client.getNutrition(DateTime(2026, 4, 4), DateTime(2026, 4, 4)),
         throwsA(isA<ApiException>()),
       );
+    });
+
+    test('getRecommendationStatuses returns list', () async {
+      final mockClient = MockClient((req) async {
+        return http.Response(
+          jsonEncode({
+            'statuses': [
+              {'rec_id': 'abc', 'status': 'done', 'updated_at': '2026-04-04T12:00:00'},
+            ]
+          }),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      });
+
+      client = ApiClient(baseUrl: 'http://test/api', apiKey: 'key', httpClient: mockClient);
+      final result = await client.getRecommendationStatuses();
+      expect(result, hasLength(1));
+      expect(result.first.recId, 'abc');
+      expect(result.first.status, RecStatus.done);
+    });
+
+    test('postRecommendationStatus sends correct payload', () async {
+      final mockClient = MockClient((req) async {
+        expect(req.method, 'POST');
+        final body = jsonDecode(req.body) as Map<String, dynamic>;
+        expect(body['rec_id'], 'abc');
+        expect(body['status'], 'done');
+        return http.Response(jsonEncode({'status': 'ok'}), 201);
+      });
+
+      client = ApiClient(baseUrl: 'http://test/api', apiKey: 'key', httpClient: mockClient);
+      await client.postRecommendationStatus('abc', RecStatus.done);
     });
 
     test('includes api key header', () async {

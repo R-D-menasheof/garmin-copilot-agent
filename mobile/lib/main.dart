@@ -8,6 +8,7 @@ import 'providers/favorites_provider.dart';
 import 'providers/goals_provider.dart';
 import 'providers/meal_provider.dart';
 import 'providers/plan_provider.dart';
+import 'providers/recommendation_provider.dart';
 import 'providers/summary_provider.dart';
 import 'providers/templates_provider.dart';
 import 'screens/dashboard_screen.dart';
@@ -50,6 +51,7 @@ void main() {
         ChangeNotifierProvider(create: (_) => PlanProvider(apiClient)),
         ChangeNotifierProvider(create: (_) => GoalsProvider(apiClient)),
         ChangeNotifierProvider(create: (_) => SummaryProvider(apiClient)),
+        ChangeNotifierProvider(create: (_) => RecommendationProvider(apiClient)),
         ChangeNotifierProvider(create: (_) {
           final provider = BiometricsProvider(
             healthConnect,
@@ -96,15 +98,15 @@ final _router = GoRouter(
         ]),
         StatefulShellBranch(routes: [
           GoRoute(
-            path: '/settings',
-            builder: (_, __) => const SettingsScreen(),
+            path: '/review',
+            builder: (_, __) => const WeeklyReviewScreen(),
           ),
         ]),
       ],
     ),
     GoRoute(
-      path: '/review',
-      builder: (_, __) => const WeeklyReviewScreen(),
+      path: '/settings',
+      builder: (_, __) => const SettingsScreen(),
     ),
     GoRoute(
       path: '/plan',
@@ -158,7 +160,7 @@ class _AppShell extends StatelessWidget {
           NavigationDestination(icon: Icon(Icons.dashboard), label: 'לוח'),
           NavigationDestination(icon: Icon(Icons.favorite), label: 'בריאות'),
           NavigationDestination(icon: Icon(Icons.history), label: 'היסטוריה'),
-          NavigationDestination(icon: Icon(Icons.settings), label: 'הגדרות'),
+          NavigationDestination(icon: Icon(Icons.insights), label: 'סקירה'),
         ],
       ),
     );
@@ -170,7 +172,7 @@ class _AppShell extends StatelessWidget {
     if (location.startsWith('/dashboard')) return 1;
     if (location.startsWith('/health')) return 2;
     if (location.startsWith('/history')) return 3;
-    if (location.startsWith('/settings')) return 4;
+    if (location.startsWith('/review')) return 4;
     return 1;
   }
 
@@ -185,7 +187,7 @@ class _AppShell extends StatelessWidget {
       case 3:
         context.go('/history');
       case 4:
-        context.go('/settings');
+        context.go('/review');
     }
   }
 }

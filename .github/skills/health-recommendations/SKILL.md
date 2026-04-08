@@ -91,3 +91,21 @@ Example:
 6. **Maximum 7 recommendations**: Don't overwhelm — focus on most impactful items
 7. **Include at least one P5 (positive)**: Reinforce what's going well — motivation matters
 8. **Write in Hebrew**: All recommendation text in Hebrew, with `[heb/eng]` category tag
+9. **vitalis-meta JSON must also be in Hebrew**: The `title` and `detail` fields in the machine-readable `recommendations` array must be in **Hebrew** (matching the report prose). Only `category` stays in English for programmatic matching. Example:
+   ```json
+   {"category": "sleep", "title": "הארכת שינה ל-7+ שעות", "priority": 1, "detail": "ממוצע 5.9 שעות עם 43% לילות קצרים. הייתה 7.2 שעות לפני שבועיים."}
+   ```
+10. **P5 recommendations are achievements, not tasks**: Write P5 titles as observations/celebrations (e.g., "RHR ירד ל-64 — השחייה עובדת!") — the mobile app displays them separately as achievements, not actionable checkboxes.
+
+## Recommendation Tracking
+
+Each recommendation gets a **stable ID** (SHA-256 hash of `category + title`) so it can be tracked across sessions. The mobile app allows users to mark recommendations as **done**, **snoozed**, or leave them **pending**.
+
+### Tracking Rules
+
+1. **Read adoption status** before writing new recommendations — check `scripts/read_recommendation_status.py` output (Phase 2 feature, skip if script doesn't exist yet)
+2. **Adopted + metric improved** → escalate to P5 (positive reinforcement): "המלצה יושמה בהצלחה! [metric] השתפר מ-X ל-Y"
+3. **Adopted + no improvement** → rephrase with modified approach, keep same priority or escalate
+4. **Snoozed** → remind next time only if metric is still relevant
+5. **Ignored (pending for 2+ weeks)** → consider rephrasing or escalating priority
+6. **New recommendations** carry forward: if the same `category + title` was given before, reference the history

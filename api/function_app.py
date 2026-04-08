@@ -13,6 +13,7 @@ from functions.read_api import (
     get_favorites,
     get_goals,
     get_latest_summary,
+    get_recommendation_statuses,
     get_summary_history,
     get_nutrition,
     get_plan_day,
@@ -27,6 +28,7 @@ from functions.write_api import (
     post_goals,
     post_meal,
     post_plan_day,
+    post_recommendation_status,
     post_summary,
     post_template,
     put_meals,
@@ -89,6 +91,11 @@ def api_get_summary_history(req: func.HttpRequest) -> func.HttpResponse:
     return get_summary_history(req)
 
 
+@app.route(route="v1/recommendations/status", methods=["GET"])
+def api_get_recommendation_statuses(req: func.HttpRequest) -> func.HttpResponse:
+    return get_recommendation_statuses(req)
+
+
 # ── Write API ─────────────────────────────────────────────────────
 
 
@@ -140,6 +147,11 @@ def api_post_plan_day(req: func.HttpRequest) -> func.HttpResponse:
 @app.route(route="v1/summary", methods=["POST"])
 def api_post_summary(req: func.HttpRequest) -> func.HttpResponse:
     return post_summary(req)
+
+
+@app.route(route="v1/recommendations/status", methods=["POST"])
+def api_post_recommendation_status(req: func.HttpRequest) -> func.HttpResponse:
+    return post_recommendation_status(req)
 
 
 # ── Ingestion API ─────────────────────────────────────────────────

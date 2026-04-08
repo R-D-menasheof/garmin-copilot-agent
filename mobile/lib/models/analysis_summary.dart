@@ -8,6 +8,7 @@ class AnalysisSummary {
   final List<String> trends;
   final List<HealthRecommendation> recommendations;
   final String contextForNextRun;
+  final String reportMarkdown;
 
   const AnalysisSummary({
     required this.date,
@@ -17,6 +18,7 @@ class AnalysisSummary {
     required this.trends,
     required this.recommendations,
     required this.contextForNextRun,
+    this.reportMarkdown = '',
   });
 
   factory AnalysisSummary.fromJson(Map<String, dynamic> json) => AnalysisSummary(
@@ -31,6 +33,7 @@ class AnalysisSummary {
             .map((item) => HealthRecommendation.fromJson(item as Map<String, dynamic>))
             .toList(),
         contextForNextRun: json['context_for_next_run'] as String,
+        reportMarkdown: (json['report_markdown'] as String?) ?? '',
       );
 
   Map<String, dynamic> toJson() => {
@@ -41,5 +44,6 @@ class AnalysisSummary {
         'trends': trends,
         'recommendations': recommendations.map((item) => item.toJson()).toList(),
         'context_for_next_run': contextForNextRun,
+        'report_markdown': reportMarkdown,
       };
 }

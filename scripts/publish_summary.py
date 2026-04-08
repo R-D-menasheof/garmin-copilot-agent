@@ -51,6 +51,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--date",
         help="Specific summary date to publish (YYYY-MM-DD). Defaults to latest.",
     )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Publish all available summaries.",
+    )
     return parser.parse_args(argv)
 
 
@@ -114,7 +119,40 @@ def publish_summary(
     if summary is None:
         raise ValueError("No summary available to publish")
 
+    # Inject the full markdown report from the .md file
+    md_path = store.directory / f"{summary.date.isoformat()}.md"
+    if md_path.exists():
+        summary = summary.model_copy(
+            update={"report_markdown": md_path.read_text(encoding="utf-8")}
+        )
+
     return send_summary(summary, api_url=api_url, api_key=api_key)
+
+
+def publish_all(
+    api_url: str | None = None,
+    api_key: str | None = None,
+    directory: Path | str | None = None,
+) -> list[dict]:
+    """Publish all available summaries.
+
+    Args:
+        api_url: Base API URL.
+        api_key: API key.
+        directory: Optional summary directory override.
+
+    Returns:
+        List of API responses.
+    """
+    store = SummaryStore(directory=directory)
+    results: list[dict] = []
+    for day in store.list_dates():
+        logger.info("Publishing %s", day.isoformat())
+        result = publish_summary(
+            summary_date=day, api_url=api_url, api_key=api_key, directory=directory
+        )
+        results.append(result)
+    return results
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -122,6 +160,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
 
     try:
+        if args.all:
+            results = publish_all()
+            sys.stdout.write(json.dumps(results, indent=2, ensure_ascii=False) + "\n")
+            return 0
         summary_date = date.fromisoformat(args.date) if args.date else None
         result = publish_summary(summary_date=summary_date)
         sys.stdout.write(json.dumps(result, indent=2, ensure_ascii=False) + "\n")

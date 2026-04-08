@@ -42,7 +42,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final compliancePct = goals.compliancePct(meals.totalCalories);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Vitalis')),
+      appBar: AppBar(
+        title: const Text('Vitalis'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () => context.push('/settings'),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -97,39 +105,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             if (latestSummary != null) ...[
               const SizedBox(height: 16),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        'תובנה יומית',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      if (latestSummary.trends.isNotEmpty)
-                        Text(latestSummary.trends.first),
-                      if (latestSummary.recommendations.isNotEmpty) ...[
-                        const SizedBox(height: 8),
+              Builder(builder: (context) {
+                // Rotate insight daily so user sees a different one each day
+                final dayOfYear = DateTime.now().difference(
+                  DateTime(DateTime.now().year, 1, 1),
+                ).inDays;
+                final trends = latestSummary.trends;
+                final recs = latestSummary.recommendations;
+                final trendIdx = trends.isNotEmpty
+                    ? dayOfYear % trends.length
+                    : -1;
+                // Pick a P1-P2 recommendation, rotating
+                final actionRecs = recs.where((r) => r.priority <= 3).toList();
+                final recIdx = actionRecs.isNotEmpty
+                    ? dayOfYear % actionRecs.length
+                    : -1;
+
+                return Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
                         Text(
-                          latestSummary.recommendations.first.title,
-                          style: Theme.of(context).textTheme.bodyLarge,
+                          'תובנה יומית',
+                          style: Theme.of(context).textTheme.titleMedium,
                         ),
                         const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton.icon(
-                            onPressed: () => context.push('/review'),
-                            icon: const Icon(Icons.insights_outlined),
-                            label: const Text('סקירה שבועית'),
+                        if (trendIdx >= 0)
+                          Text(trends[trendIdx]),
+                        if (recIdx >= 0) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            actionRecs[recIdx].title,
+                            style: Theme.of(context).textTheme.bodyLarge,
                           ),
-                        ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
-              ),
+                );
+              }),
             ],
             const SizedBox(height: 16),
             // Macro breakdown

@@ -11,8 +11,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from functions.read_api import get_nutrition, get_biometrics, get_combined, get_goals
-from vitalis.models import BiometricsRecord, MealEntry, NutritionSource
+from functions.read_api import get_nutrition, get_biometrics, get_combined, get_goals, get_recommendation_statuses
+from vitalis.models import BiometricsRecord, MealEntry, NutritionSource, RecStatus, RecommendationStatus
 
 
 # ── Helpers ───────────────────────────────────────────────────────
@@ -214,4 +214,36 @@ class TestAuth:
             headers={"x-api-key": "wrong-key"},
         )
         resp = get_nutrition(req)
+        assert resp.status_code == 401
+
+
+# ── Recommendation Status ────────────────────────────────────────
+
+
+class TestGetRecommendationStatuses:
+    @patch("functions.read_api._get_blob_store")
+    @patch("functions.read_api.verify_api_key", return_value=True)
+    def test_returns_list(self, _auth, mock_store_fn) -> None:
+        store = MagicMock()
+        store.load_recommendation_statuses.return_value = [
+            RecommendationStatus(
+                rec_id="abc",
+                status=RecStatus.DONE,
+                updated_at=datetime(2026, 4, 4, 12, 0),
+            ),
+        ]
+        mock_store_fn.return_value = store
+
+        req = _make_request({})
+        resp = get_recommendation_statuses(req)
+
+        assert resp.status_code == 200
+        body = json.loads(resp.get_body())
+        assert len(body["statuses"]) == 1
+        assert body["statuses"][0]["rec_id"] == "abc"
+
+    @patch("functions.read_api.verify_api_key", return_value=False)
+    def test_unauthorized(self, _auth) -> None:
+        req = _make_request({}, headers={})
+        resp = get_recommendation_statuses(req)
         assert resp.status_code == 401

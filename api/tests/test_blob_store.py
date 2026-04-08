@@ -19,6 +19,8 @@ from vitalis.models import (
     MealEntry,
     NutritionGoal,
     NutritionSource,
+    RecStatus,
+    RecommendationStatus,
 )
 
 
@@ -218,6 +220,51 @@ class TestBiometrics:
         assert date(2026, 4, 4) in result
         assert result[date(2026, 4, 3)].steps == 7000
         assert result[date(2026, 4, 4)].steps == 8500
+
+
+# ── Recommendation Status ──────────────────────────────────────────
+
+
+def _rec_status(rec_id: str = "abc123", status: RecStatus = RecStatus.PENDING) -> RecommendationStatus:
+    return RecommendationStatus(
+        rec_id=rec_id,
+        status=status,
+        updated_at=datetime(2026, 4, 4, 12, 0),
+    )
+
+
+class TestRecommendationStatus:
+    def test_save_creates_blob(self, store_and_backend) -> None:
+        store, backend = store_and_backend
+        store.save_recommendation_statuses([_rec_status()])
+
+        raw = backend.get_raw("recommendations/status.json")
+        assert raw is not None
+        assert len(raw) == 1
+        assert raw[0]["rec_id"] == "abc123"
+
+    def test_roundtrip(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        store.save_recommendation_statuses([_rec_status("a"), _rec_status("b", RecStatus.DONE)])
+
+        result = store.load_recommendation_statuses()
+        assert len(result) == 2
+        assert result[0].rec_id == "a"
+        assert result[1].status == RecStatus.DONE
+
+    def test_load_empty(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        result = store.load_recommendation_statuses()
+        assert result == []
+
+    def test_overwrite(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        store.save_recommendation_statuses([_rec_status("a", RecStatus.PENDING)])
+        store.save_recommendation_statuses([_rec_status("a", RecStatus.DONE)])
+
+        result = store.load_recommendation_statuses()
+        assert len(result) == 1
+        assert result[0].status == RecStatus.DONE
 
 
 # ── Food Cache ────────────────────────────────────────────────────

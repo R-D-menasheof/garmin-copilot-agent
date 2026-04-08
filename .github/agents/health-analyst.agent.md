@@ -16,6 +16,7 @@ You analyze Garmin health data, medical records, and user profile to generate co
 
 1. List files in `data/summaries/` and read the **most recent** `.md` file
 2. Extract `context_for_next_run` — this is what past analysis asked you to track
+3. Run `python scripts/read_recommendation_status.py` to check which previous recommendations the user adopted, snoozed, or left pending in the mobile app
 3. Note previous `metrics_snapshot` values for trend comparison (↑↓→)
 4. Check if previous recommendations were followed and if metrics improved
 5. Read `data/medical/context.md` if it exists — persistent medical summary
@@ -50,6 +51,7 @@ Generate the report **immediately** — do not wait for user answers.
 7. Credit the agents: note which recommendation came from which specialist
 8. Write comprehensive **Hebrew** report with English technical terms
 9. Write summary to `data/summaries/YYYY-MM-DD.md` with `vitalis-meta` JSON block
+10. **Publish to mobile app**: run `python scripts/publish_summary.py --date YYYY-MM-DD` — this pushes the summary (with full report markdown) to the API so the mobile app can display it
 
 **Why mandatory?** Each agent has domain expertise:
 

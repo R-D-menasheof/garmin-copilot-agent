@@ -117,6 +117,22 @@ BiometricsRecord posted to /api/v1/biometrics (via write_api)
 Stored in biometrics/{date}.json
 ```
 
+### 4. Summary Publication (Agent → Mobile App)
+
+```
+health-analyst writes summary to data/summaries/YYYY-MM-DD.md
+  ↓
+scripts/publish_summary.py --date YYYY-MM-DD
+  ↓
+POST /api/v1/summary with AnalysisSummary (includes report_markdown)
+  ↓
+BlobStore saves to summaries/{date}.json + summaries/latest.json
+  ↓
+Mobile app reads GET /api/v1/summary/latest → displays in Review tab
+  ↓
+User sees: Todo (recommendations) | Report (full Hebrew) | Trends (charts)
+```
+
 ## SSOT Boundaries
 
 | Concern | SSOT Module | Notes |
@@ -143,6 +159,12 @@ vitalis-data/                        # Azure Blob container
 ├── biometrics/
 │   ├── 2026-04-04.json             # BiometricsRecord
 │   └── ...
+├── summaries/
+│   ├── 2026-04-04.json             # AnalysisSummary (with report_markdown)
+│   ├── latest.json                  # Copy of most recent summary
+│   └── ...
+├── recommendations/
+│   └── status.json                  # [RecommendationStatus, ...] (Phase 2)
 ├── food_cache/
 │   └── known_foods.json            # [KnownFood, ...] (~50KB for 1000 items)
 └── sync_state.json                  # Last sync timestamps
