@@ -19,6 +19,12 @@ from functions.read_api import (
     get_plan_day,
     get_recents,
     get_templates,
+    get_timeline,
+    get_active_training,
+    get_goal_programs,
+    get_sleep_protocol,
+    get_sleep_entries,
+    get_lab_trends,
 )
 from functions.write_api import (
     delete_favorite,
@@ -31,6 +37,13 @@ from functions.write_api import (
     post_recommendation_status,
     post_summary,
     post_template,
+    post_timeline_event,
+    post_training_program,
+    patch_training_session,
+    post_goal_program,
+    post_sleep_protocol,
+    post_sleep_entry,
+    post_lab_trends,
     put_meals,
 )
 from functions.ingestion import analyze_image, analyze_text, lookup_barcode
@@ -96,6 +109,36 @@ def api_get_recommendation_statuses(req: func.HttpRequest) -> func.HttpResponse:
     return get_recommendation_statuses(req)
 
 
+@app.route(route="v1/timeline", methods=["GET"])
+def api_get_timeline(req: func.HttpRequest) -> func.HttpResponse:
+    return get_timeline(req)
+
+
+@app.route(route="v1/training/active", methods=["GET"])
+def api_get_active_training(req: func.HttpRequest) -> func.HttpResponse:
+    return get_active_training(req)
+
+
+@app.route(route="v1/goals/programs", methods=["GET"])
+def api_get_goal_programs(req: func.HttpRequest) -> func.HttpResponse:
+    return get_goal_programs(req)
+
+
+@app.route(route="v1/sleep/protocol", methods=["GET"])
+def api_get_sleep_protocol(req: func.HttpRequest) -> func.HttpResponse:
+    return get_sleep_protocol(req)
+
+
+@app.route(route="v1/sleep/entries", methods=["GET"])
+def api_get_sleep_entries(req: func.HttpRequest) -> func.HttpResponse:
+    return get_sleep_entries(req)
+
+
+@app.route(route="v1/medical/lab-trends", methods=["GET"])
+def api_get_lab_trends(req: func.HttpRequest) -> func.HttpResponse:
+    return get_lab_trends(req)
+
+
 # ── Write API ─────────────────────────────────────────────────────
 
 
@@ -152,6 +195,41 @@ def api_post_summary(req: func.HttpRequest) -> func.HttpResponse:
 @app.route(route="v1/recommendations/status", methods=["POST"])
 def api_post_recommendation_status(req: func.HttpRequest) -> func.HttpResponse:
     return post_recommendation_status(req)
+
+
+@app.route(route="v1/timeline", methods=["POST"])
+def api_post_timeline_event(req: func.HttpRequest) -> func.HttpResponse:
+    return post_timeline_event(req)
+
+
+@app.route(route="v1/training", methods=["POST"])
+def api_post_training_program(req: func.HttpRequest) -> func.HttpResponse:
+    return post_training_program(req)
+
+
+@app.route(route="v1/training/session", methods=["PATCH"])
+def api_patch_training_session(req: func.HttpRequest) -> func.HttpResponse:
+    return patch_training_session(req)
+
+
+@app.route(route="v1/goals/programs", methods=["POST"])
+def api_post_goal_program(req: func.HttpRequest) -> func.HttpResponse:
+    return post_goal_program(req)
+
+
+@app.route(route="v1/sleep/protocol", methods=["POST"])
+def api_post_sleep_protocol(req: func.HttpRequest) -> func.HttpResponse:
+    return post_sleep_protocol(req)
+
+
+@app.route(route="v1/sleep/entry", methods=["POST"])
+def api_post_sleep_entry(req: func.HttpRequest) -> func.HttpResponse:
+    return post_sleep_entry(req)
+
+
+@app.route(route="v1/medical/lab-trends", methods=["POST"])
+def api_post_lab_trends(req: func.HttpRequest) -> func.HttpResponse:
+    return post_lab_trends(req)
 
 
 # ── Ingestion API ─────────────────────────────────────────────────

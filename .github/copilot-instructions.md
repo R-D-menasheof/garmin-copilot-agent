@@ -86,6 +86,8 @@ Each data concern has **exactly one owning module**. Never duplicate logic.
 | Goal setting CLI         | `scripts/set_goals.py`         | External Agent sets weekly nutrition goals    |
 | Summary publishing CLI   | `scripts/publish_summary.py`   | Push summaries (with report_markdown) to API  |
 | Rec status read CLI      | `scripts/read_recommendation_status.py` | Agent reads recommendation adoption status |
+| Timeline event CLI       | `scripts/add_timeline_event.py`| Agent adds health timeline events             |
+| Training program CLI     | `scripts/set_training.py`      | Agent sets structured training programs       |
 
 ### 4. Agent Memory Protocol
 

@@ -27,12 +27,18 @@ from vitalis.models import (
     AnalysisSummary,
     BiometricsRecord,
     FavoriteMeal,
+    GoalProgram,
     KnownFood,
+    LabTrend,
     MealEntry,
     MealTemplate,
     NutritionGoal,
     PlanDay,
     RecommendationStatus,
+    SleepChecklist,
+    SleepEntry,
+    TimelineEvent,
+    TrainingProgram,
 )
 
 logger = logging.getLogger(__name__)
@@ -279,6 +285,107 @@ class BlobStore:
         return [RecommendationStatus.model_validate(item) for item in items]
 
     # ── Combined (External Agent) ──────────────────────────────────
+
+    # ── Timeline ────────────────────────────────────────────────
+
+    def save_timeline_events(self, events: list[TimelineEvent]) -> None:
+        """Persist timeline events."""
+        data = json.dumps(
+            [e.model_dump(mode="json") for e in events], ensure_ascii=False,
+        )
+        self._upload("timeline/events.json", data)
+
+    def load_timeline_events(self) -> list[TimelineEvent]:
+        """Load all timeline events."""
+        raw = self._download("timeline/events.json")
+        if raw is None:
+            return []
+        return [TimelineEvent.model_validate(item) for item in json.loads(raw)]
+
+    def append_timeline_event(self, event: TimelineEvent) -> None:
+        """Append a single event to the timeline."""
+        events = self.load_timeline_events()
+        events.append(event)
+        self.save_timeline_events(events)
+
+    # ── Training Programs ───────────────────────────────────────
+
+    def save_training_program(self, program: TrainingProgram) -> None:
+        """Persist the active training program."""
+        self._upload("training/active.json", program.model_dump_json())
+
+    def load_active_training_program(self) -> TrainingProgram | None:
+        """Load the active training program."""
+        raw = self._download("training/active.json")
+        if raw is None:
+            return None
+        return TrainingProgram.model_validate_json(raw)
+
+    # ── Goal Programs ───────────────────────────────────────────
+
+    def save_goal_program(self, program: GoalProgram) -> None:
+        """Persist a goal program."""
+        self._upload(f"goals/programs/{program.id}.json", program.model_dump_json())
+
+    def load_goal_programs(self) -> list[GoalProgram]:
+        """Load all goal programs."""
+        programs: list[GoalProgram] = []
+        try:
+            blobs = self._container.list_blobs(name_starts_with="goals/programs/")
+            for blob in blobs:
+                raw = self._download(blob.name)
+                if raw:
+                    programs.append(GoalProgram.model_validate_json(raw))
+        except Exception:
+            pass
+        return programs
+
+    # ── Sleep Protocol ──────────────────────────────────────────
+
+    def save_sleep_protocol(self, checklist: SleepChecklist) -> None:
+        """Persist the sleep checklist configuration."""
+        self._upload("sleep/protocol.json", checklist.model_dump_json())
+
+    def load_sleep_protocol(self) -> SleepChecklist | None:
+        """Load the sleep checklist."""
+        raw = self._download("sleep/protocol.json")
+        if raw is None:
+            return None
+        return SleepChecklist.model_validate_json(raw)
+
+    def save_sleep_entry(self, entry: SleepEntry) -> None:
+        """Persist a single night's sleep log."""
+        self._upload(
+            f"sleep/entries/{entry.date.isoformat()}.json",
+            entry.model_dump_json(),
+        )
+
+    def load_sleep_entries(self, start: date, end: date) -> list[SleepEntry]:
+        """Load sleep entries for a date range."""
+        entries: list[SleepEntry] = []
+        current = start
+        while current <= end:
+            raw = self._download(f"sleep/entries/{current.isoformat()}.json")
+            if raw:
+                entries.append(SleepEntry.model_validate_json(raw))
+            current += timedelta(days=1)
+        return entries
+
+    # ── Lab Trends ──────────────────────────────────────────────
+
+    def save_lab_trends(self, trends: list[LabTrend]) -> None:
+        """Persist parsed lab trends."""
+        data = json.dumps(
+            [t.model_dump(mode="json") for t in trends], ensure_ascii=False,
+        )
+        self._upload("medical/lab_trends.json", data)
+
+    def load_lab_trends(self) -> list[LabTrend]:
+        """Load parsed lab trends."""
+        raw = self._download("medical/lab_trends.json")
+        if raw is None:
+            return []
+        return [LabTrend.model_validate(item) for item in json.loads(raw)]
 
     # ── Combined (External Agent) ──────────────────────────────────
 

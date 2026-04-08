@@ -227,6 +227,14 @@ class AnalysisSummary(BaseModel):
     report_markdown: str = Field(
         default="", description="Full Hebrew report markdown from the summary file"
     )
+    nudge_rules: list["NudgeRule"] = Field(
+        default_factory=list,
+        description="Agent-written rules evaluated daily against biometrics",
+    )
+    correlations: list["HealthCorrelation"] = Field(
+        default_factory=list,
+        description="Cross-domain correlations discovered by the agent",
+    )
 
 
 # ── Recommendation Tracking ───────────────────────────────────────
@@ -255,3 +263,196 @@ class RecommendationStatus(BaseModel):
         key = f"{rec.category}:{rec.title}"
         rec_id = hashlib.sha256(key.encode()).hexdigest()[:16]
         return cls(rec_id=rec_id)
+
+
+# ── Daily Nudges ──────────────────────────────────────────────────
+
+
+class NudgeRule(BaseModel):
+    """A rule the agent writes for daily evaluation against biometrics."""
+
+    condition: str = Field(
+        ..., description="e.g. 'sleep_hours < 6', 'resting_hr > 70'"
+    )
+    message_he: str = Field(..., description="Hebrew nudge message for the user")
+    category: str = Field(..., description="e.g. 'recovery', 'sleep', 'fitness'")
+    priority: int = Field(ge=1, le=5, default=3)
+
+
+# ── Health Timeline ───────────────────────────────────────────────
+
+
+class TimelineCategory(StrEnum):
+    """Category of a timeline event."""
+
+    MEDICAL = "medical"
+    MILESTONE = "milestone"
+    MEDICATION = "medication"
+    LIFESTYLE = "lifestyle"
+
+
+class TimelineSeverity(StrEnum):
+    """Severity/tone of a timeline event."""
+
+    INFO = "info"
+    WARNING = "warning"
+    CRITICAL = "critical"
+    POSITIVE = "positive"
+
+
+class TimelineEvent(BaseModel):
+    """A single event in the user's health timeline."""
+
+    date: DateValue
+    category: TimelineCategory
+    title_he: str
+    detail_he: str = ""
+    icon: str = ""
+    severity: TimelineSeverity = TimelineSeverity.INFO
+    source: str = Field(default="agent", description="'agent', 'medical', 'user'")
+
+
+# ── Health Correlations ───────────────────────────────────────────
+
+
+class CorrelationRelationship(StrEnum):
+    """Type of correlation between two metrics."""
+
+    POSITIVE = "positive"
+    NEGATIVE = "negative"
+    THRESHOLD = "threshold"
+
+
+class HealthCorrelation(BaseModel):
+    """A cross-domain correlation discovered by the agent."""
+
+    metric_a: str
+    metric_b: str
+    relationship: CorrelationRelationship
+    description_he: str
+    evidence: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    discovered_date: DateValue
+
+
+# ── Training Programs ─────────────────────────────────────────────
+
+
+class TrainingSession(BaseModel):
+    """A single planned workout session."""
+
+    day: str = Field(..., description="Day name or date, e.g. 'ראשון' or 'Monday'")
+    type: str = Field(..., description="e.g. 'swimming', 'strength', 'walk', 'rest'")
+    description: str = ""
+    duration_min: int = Field(ge=0, default=0)
+    target_hr_zone: Optional[int] = None
+    completed: bool = False
+
+
+class TrainingWeek(BaseModel):
+    """One week within a training program."""
+
+    week_number: int
+    sessions: list[TrainingSession] = Field(default_factory=list)
+    notes: str = ""
+
+
+class TrainingProgram(BaseModel):
+    """A structured multi-week training program."""
+
+    id: str = Field(default_factory=_generate_id)
+    name: str
+    goal: str
+    duration_weeks: int
+    weeks: list[TrainingWeek] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=datetime.now)
+    active: bool = True
+
+
+# ── Goal Programs ─────────────────────────────────────────────────
+
+
+class Milestone(BaseModel):
+    """A measurable milestone within a goal program."""
+
+    title_he: str
+    target_metric: str = ""
+    target_value: float = 0
+    current_value: float = 0
+    deadline: Optional[DateValue] = None
+    completed: bool = False
+
+
+class GoalProgram(BaseModel):
+    """A structured goal program with milestones."""
+
+    id: str = Field(default_factory=_generate_id)
+    name_he: str
+    description_he: str = ""
+    duration_weeks: int = 0
+    milestones: list[Milestone] = Field(default_factory=list)
+    started_at: datetime = Field(default_factory=datetime.now)
+    progress_pct: float = 0.0
+    active: bool = True
+
+
+# ── Sleep Protocol ────────────────────────────────────────────────
+
+
+class ChecklistItem(BaseModel):
+    """A single item in the sleep checklist."""
+
+    id: str
+    label_he: str
+    category: str = Field(
+        ..., description="'wind_down', 'environment', or 'habits'"
+    )
+    checked: bool = False
+
+
+class SleepChecklist(BaseModel):
+    """The user's sleep wind-down checklist."""
+
+    items: list[ChecklistItem] = Field(default_factory=list)
+
+
+class SleepEntry(BaseModel):
+    """A single night's sleep log entry."""
+
+    date: DateValue
+    bedtime: Optional[str] = None
+    waketime: Optional[str] = None
+    rating: int = Field(ge=1, le=5, default=3)
+    notes: str = ""
+    caffeine_cutoff: Optional[str] = None
+    screen_cutoff: Optional[str] = None
+    checklist_completed: int = 0
+
+
+# ── Lab Trends ────────────────────────────────────────────────────
+
+
+class LabStatus(StrEnum):
+    """Lab value status relative to reference range."""
+
+    NORMAL = "normal"
+    HIGH = "high"
+    LOW = "low"
+
+
+class LabDataPoint(BaseModel):
+    """A single lab measurement at a point in time."""
+
+    date: DateValue
+    value: float
+    unit: str
+    reference_range: str = ""
+    status: LabStatus = LabStatus.NORMAL
+
+
+class LabTrend(BaseModel):
+    """Time-series of a single lab metric across blood tests."""
+
+    metric: str
+    display_name_he: str = ""
+    values: list[LabDataPoint] = Field(default_factory=list)

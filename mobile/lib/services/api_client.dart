@@ -4,12 +4,17 @@ import 'package:http/http.dart' as http;
 
 import '../models/analysis_summary.dart';
 import '../models/favorite_meal.dart';
+import '../models/goal_program.dart';
+import '../models/health_data_models.dart';
 import '../models/meal_entry.dart';
 import '../models/meal_template.dart';
 import '../models/plan_day.dart';
 import '../models/nutrition_goal.dart';
 import '../models/biometrics_record.dart';
 import '../models/recommendation_status.dart';
+import '../models/sleep_models.dart';
+import '../models/timeline_event.dart';
+import '../models/training_program.dart';
 
 /// HTTP client for the Vitalis Azure Functions API.
 class ApiClient {
@@ -323,6 +328,86 @@ class ApiClient {
       body: jsonEncode({'rec_id': recId, 'status': status.name}),
     );
     _checkResponse(resp);
+  }
+
+  // ── Timeline ─────────────────────────────────────────────
+
+  Future<List<TimelineEvent>> getTimeline() async {
+    final uri = Uri.parse('$baseUrl/v1/timeline');
+    final resp = await _httpClient.get(uri, headers: _headers);
+    _checkResponse(resp);
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    return (body['events'] as List? ?? [])
+        .map((e) => TimelineEvent.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  // ── Training ─────────────────────────────────────────────
+
+  Future<TrainingProgram?> getActiveTrainingProgram() async {
+    final uri = Uri.parse('$baseUrl/v1/training/active');
+    final resp = await _httpClient.get(uri, headers: _headers);
+    _checkResponse(resp);
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    final program = body['program'];
+    if (program == null) return null;
+    return TrainingProgram.fromJson(program as Map<String, dynamic>);
+  }
+
+  Future<void> patchTrainingSession(int week, int session, bool completed) async {
+    final uri = Uri.parse('$baseUrl/v1/training/session');
+    final resp = await _httpClient.patch(
+      uri,
+      headers: _headers,
+      body: jsonEncode({'week': week, 'session': session, 'completed': completed}),
+    );
+    _checkResponse(resp);
+  }
+
+  // ── Goal Programs ────────────────────────────────────────
+
+  Future<List<GoalProgram>> getGoalPrograms() async {
+    final uri = Uri.parse('$baseUrl/v1/goals/programs');
+    final resp = await _httpClient.get(uri, headers: _headers);
+    _checkResponse(resp);
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    return (body['programs'] as List? ?? [])
+        .map((p) => GoalProgram.fromJson(p as Map<String, dynamic>))
+        .toList();
+  }
+
+  // ── Sleep Protocol ───────────────────────────────────────
+
+  Future<SleepChecklist?> getSleepProtocol() async {
+    final uri = Uri.parse('$baseUrl/v1/sleep/protocol');
+    final resp = await _httpClient.get(uri, headers: _headers);
+    _checkResponse(resp);
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    final protocol = body['protocol'];
+    if (protocol == null) return null;
+    return SleepChecklist.fromJson(protocol as Map<String, dynamic>);
+  }
+
+  Future<void> postSleepEntry(SleepEntry entry) async {
+    final uri = Uri.parse('$baseUrl/v1/sleep/entry');
+    final resp = await _httpClient.post(
+      uri,
+      headers: _headers,
+      body: jsonEncode(entry.toJson()),
+    );
+    _checkResponse(resp);
+  }
+
+  // ── Lab Trends ───────────────────────────────────────────
+
+  Future<List<LabTrend>> getLabTrends() async {
+    final uri = Uri.parse('$baseUrl/v1/medical/lab-trends');
+    final resp = await _httpClient.get(uri, headers: _headers);
+    _checkResponse(resp);
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    return (body['trends'] as List? ?? [])
+        .map((t) => LabTrend.fromJson(t as Map<String, dynamic>))
+        .toList();
   }
 
   // ── Helpers ──────────────────────────────────────────────

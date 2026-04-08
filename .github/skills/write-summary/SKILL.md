@@ -123,7 +123,15 @@ The `vitalis-meta` JSON block stays **in English** — it's machine-readable for
   "trends": [...],
   "recommendations": [...],
   "context_for_next_run": "...",
-  "report_markdown": ""
+  "report_markdown": "",
+  "nudge_rules": [
+    {"condition": "sleep_hours < 6", "message_he": "לילה קצר — היום יום קל, תעדיף הליכה", "category": "recovery", "priority": 1},
+    {"condition": "resting_hr > 70", "message_he": "דופק מנוחה גבוה — שקול יום מנוחה", "category": "recovery", "priority": 2},
+    {"condition": "steps < 3000", "message_he": "מעט תנועה היום — נסה הליכה קצרה", "category": "fitness", "priority": 3}
+  ],
+  "correlations": [
+    {"metric_a": "avg_sleep_hours", "metric_b": "avg_hrv_nightly", "relationship": "positive", "description_he": "HRV גבוה ב-35% אחרי 7+ שעות שינה", "evidence": "4 weeks data", "confidence": 0.85, "discovered_date": "2026-04-08"}
+  ]
 }
 ```
 ````
@@ -149,6 +157,9 @@ The `vitalis-meta` JSON block stays **in English** — it's machine-readable for
 12. **Hebrew prose** with English technical terms (VO2max, HRV, BB, SpO2, REM, RHR, BMI)
 13. **Long and detailed** — the report should be comprehensive, include explanations, not a brief summary
 14. **Publish to mobile app** — after saving the summary, run `python scripts/publish_summary.py --date YYYY-MM-DD` to push it to the API. The script reads the raw `.md` file and includes it as `report_markdown` in the API payload so the mobile app can render the full Hebrew report.
+15. **Write 3-5 nudge rules** in the `nudge_rules` array — simple condition-based rules the mobile app evaluates daily against Health Connect data. Conditions use format: `metric_name operator value` (e.g., `sleep_hours < 6`). Supported metrics: `sleep_hours`, `resting_hr`, `steps`, `hrv_ms`, `spo2_pct`, `sleep_score`. Messages must be Hebrew and actionable.
+16. **Write 2-3 correlations** in the `correlations` array — cross-domain patterns discovered during analysis (see `correlation-engine` skill). Only include correlations with 4+ data points and confidence > 0.6.
+17. **Add timeline events** — after saving the summary, check for milestone events (new personal records, medication changes, medical events, lifestyle changes) and POST each to `/api/v1/timeline` using `scripts/add_timeline_event.py`.
 
 ## How to Write Programmatically
 

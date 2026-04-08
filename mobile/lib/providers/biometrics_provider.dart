@@ -28,6 +28,7 @@ class BiometricsProvider extends ChangeNotifier {
 
   BiometricsRecord? _latest;
   BiometricsRecord? get latest => _latest;
+  BiometricsRecord? get today => _latest;
 
   bool _loading = false;
   bool get loading => _loading;

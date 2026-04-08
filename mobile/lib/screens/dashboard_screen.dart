@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../providers/biometrics_provider.dart';
 import '../providers/goals_provider.dart';
 import '../providers/meal_provider.dart';
 import '../providers/summary_provider.dart';
+import '../services/nudge_evaluator.dart';
 import '../widgets/macro_bar.dart';
 
 /// Dashboard screen — calories progress, macro breakdown, goal compliance.
@@ -146,6 +148,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 );
               }),
+            ],
+            // Nudge cards — context-aware based on today's biometrics
+            if (latestSummary != null && latestSummary.nudgeRules.isNotEmpty)
+              Builder(builder: (context) {
+                final bio = context.watch<BiometricsProvider>();
+                final activeNudges = NudgeEvaluator.evaluate(
+                  latestSummary.nudgeRules, bio.today,
+                );
+                if (activeNudges.isEmpty) return const SizedBox.shrink();
+                return Column(
+                  children: [
+                    const SizedBox(height: 12),
+                    for (final nudge in activeNudges)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Card(
+                          color: nudge.priority <= 2
+                              ? Colors.orange.withAlpha(30)
+                              : Colors.blue.withAlpha(20),
+                          child: ListTile(
+                            leading: Icon(
+                              nudge.priority <= 2 ? Icons.warning_amber : Icons.lightbulb_outline,
+                              color: nudge.priority <= 2 ? Colors.orange : Colors.blue,
+                            ),
+                            title: Text(nudge.messageHe),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              }),
+            // Discoveries card
+            if (latestSummary != null && latestSummary.correlations.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Card(
+                color: Colors.purple.withAlpha(15),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text('🔍 תגלית', style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 8),
+                      Text(latestSummary.correlations.first.descriptionHe),
+                    ],
+                  ),
+                ),
+              ),
             ],
             const SizedBox(height: 16),
             // Macro breakdown

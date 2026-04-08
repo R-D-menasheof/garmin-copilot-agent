@@ -52,6 +52,10 @@ Generate the report **immediately** — do not wait for user answers.
 8. Write comprehensive **Hebrew** report with English technical terms
 9. Write summary to `data/summaries/YYYY-MM-DD.md` with `vitalis-meta` JSON block
 10. **Publish to mobile app**: run `python scripts/publish_summary.py --date YYYY-MM-DD` — this pushes the summary (with full report markdown) to the API so the mobile app can display it
+11. **Write nudge rules** in the vitalis-meta block: 3-5 condition-based rules the app evaluates daily (e.g., `sleep_hours < 6 → "יום קל מומלץ"`)
+12. **Run correlation analysis** using the `correlation-engine` skill — find 2-3 cross-domain patterns and include them in the report as "🔍 תגליות" section
+13. **Add timeline events** for any milestones, medical events, medication changes, or lifestyle changes discovered during analysis — run `python scripts/add_timeline_event.py` for each
+14. **Update goal programs** if active — load from `/v1/goals/programs`, update milestone `current_value` based on latest data, report progress
 
 **Why mandatory?** Each agent has domain expertise:
 

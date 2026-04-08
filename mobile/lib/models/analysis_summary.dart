@@ -1,4 +1,6 @@
 import 'health_recommendation.dart';
+import 'nudge_rule.dart';
+import 'health_data_models.dart';
 
 class AnalysisSummary {
   final DateTime date;
@@ -9,6 +11,8 @@ class AnalysisSummary {
   final List<HealthRecommendation> recommendations;
   final String contextForNextRun;
   final String reportMarkdown;
+  final List<NudgeRule> nudgeRules;
+  final List<HealthCorrelation> correlations;
 
   const AnalysisSummary({
     required this.date,
@@ -19,6 +23,8 @@ class AnalysisSummary {
     required this.recommendations,
     required this.contextForNextRun,
     this.reportMarkdown = '',
+    this.nudgeRules = const [],
+    this.correlations = const [],
   });
 
   factory AnalysisSummary.fromJson(Map<String, dynamic> json) => AnalysisSummary(
@@ -34,6 +40,12 @@ class AnalysisSummary {
             .toList(),
         contextForNextRun: json['context_for_next_run'] as String,
         reportMarkdown: (json['report_markdown'] as String?) ?? '',
+        nudgeRules: (json['nudge_rules'] as List? ?? [])
+            .map((item) => NudgeRule.fromJson(item as Map<String, dynamic>))
+            .toList(),
+        correlations: (json['correlations'] as List? ?? [])
+            .map((item) => HealthCorrelation.fromJson(item as Map<String, dynamic>))
+            .toList(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -45,5 +57,7 @@ class AnalysisSummary {
         'recommendations': recommendations.map((item) => item.toJson()).toList(),
         'context_for_next_run': contextForNextRun,
         'report_markdown': reportMarkdown,
+        'nudge_rules': nudgeRules.map((r) => r.toJson()).toList(),
+        'correlations': correlations.map((c) => c.toJson()).toList(),
       };
 }

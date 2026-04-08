@@ -14,13 +14,19 @@ from vitalis.models import (
     AnalysisSummary,
     BiometricsRecord,
     FavoriteMeal,
+    GoalProgram,
     KnownFood,
+    LabTrend,
     MealEntry,
     MealTemplate,
     NutritionGoal,
     PlanDay,
     RecStatus,
     RecommendationStatus,
+    SleepChecklist,
+    SleepEntry,
+    TimelineEvent,
+    TrainingProgram,
 )
 
 logger = logging.getLogger(__name__)
@@ -263,3 +269,122 @@ def post_recommendation_status(req) -> "HttpResponse":
 
     store.save_recommendation_statuses(statuses)
     return _ok({"status": "ok", "rec_id": rec_id, "new_status": status_str})
+
+
+def post_timeline_event(req) -> "HttpResponse":
+    """POST /api/v1/timeline — add a timeline event."""
+    if not verify_api_key(req):
+        return _error("Unauthorized", 401)
+
+    try:
+        event = TimelineEvent.model_validate_json(req.get_body())
+    except (ValidationError, ValueError) as e:
+        return _error(f"Invalid timeline event: {e}")
+
+    store = _get_blob_store()
+    store.append_timeline_event(event)
+    return _ok({"status": "ok", "event": event.model_dump(mode="json")})
+
+
+def post_training_program(req) -> "HttpResponse":
+    """POST /api/v1/training — save a training program."""
+    if not verify_api_key(req):
+        return _error("Unauthorized", 401)
+
+    try:
+        program = TrainingProgram.model_validate_json(req.get_body())
+    except (ValidationError, ValueError) as e:
+        return _error(f"Invalid training program: {e}")
+
+    store = _get_blob_store()
+    store.save_training_program(program)
+    return _ok({"status": "ok", "program": program.model_dump(mode="json")})
+
+
+def patch_training_session(req) -> "HttpResponse":
+    """PATCH /api/v1/training/session — mark a session completed."""
+    if not verify_api_key(req):
+        return _error("Unauthorized", 401)
+
+    try:
+        body = json.loads(req.get_body())
+        week = body["week"]
+        session_idx = body["session"]
+        completed = body.get("completed", True)
+    except (json.JSONDecodeError, KeyError) as e:
+        return _error(f"Invalid request: {e}")
+
+    store = _get_blob_store()
+    program = store.load_active_training_program()
+    if program is None:
+        return _error("No active training program", 404)
+
+    if week < 0 or week >= len(program.weeks):
+        return _error("Invalid week index")
+    if session_idx < 0 or session_idx >= len(program.weeks[week].sessions):
+        return _error("Invalid session index")
+
+    program.weeks[week].sessions[session_idx].completed = completed
+    store.save_training_program(program)
+    return _ok({"status": "ok"}, status_code=200)
+
+
+def post_goal_program(req) -> "HttpResponse":
+    """POST /api/v1/goals/programs — save a goal program."""
+    if not verify_api_key(req):
+        return _error("Unauthorized", 401)
+
+    try:
+        program = GoalProgram.model_validate_json(req.get_body())
+    except (ValidationError, ValueError) as e:
+        return _error(f"Invalid goal program: {e}")
+
+    store = _get_blob_store()
+    store.save_goal_program(program)
+    return _ok({"status": "ok", "program": program.model_dump(mode="json")})
+
+
+def post_sleep_protocol(req) -> "HttpResponse":
+    """POST /api/v1/sleep/protocol — save sleep checklist."""
+    if not verify_api_key(req):
+        return _error("Unauthorized", 401)
+
+    try:
+        checklist = SleepChecklist.model_validate_json(req.get_body())
+    except (ValidationError, ValueError) as e:
+        return _error(f"Invalid sleep protocol: {e}")
+
+    store = _get_blob_store()
+    store.save_sleep_protocol(checklist)
+    return _ok({"status": "ok", "protocol": checklist.model_dump(mode="json")})
+
+
+def post_sleep_entry(req) -> "HttpResponse":
+    """POST /api/v1/sleep/entry — log a sleep entry."""
+    if not verify_api_key(req):
+        return _error("Unauthorized", 401)
+
+    try:
+        entry = SleepEntry.model_validate_json(req.get_body())
+    except (ValidationError, ValueError) as e:
+        return _error(f"Invalid sleep entry: {e}")
+
+    store = _get_blob_store()
+    store.save_sleep_entry(entry)
+    return _ok({"status": "ok", "entry": entry.model_dump(mode="json")})
+
+
+def post_lab_trends(req) -> "HttpResponse":
+    """POST /api/v1/medical/lab-trends — save parsed lab trends."""
+    if not verify_api_key(req):
+        return _error("Unauthorized", 401)
+
+    try:
+        body = json.loads(req.get_body())
+        trends = [LabTrend.model_validate(item) for item in body.get("trends", [])]
+    except (json.JSONDecodeError, ValidationError, ValueError) as e:
+        return _error(f"Invalid lab trends: {e}")
+
+    store = _get_blob_store()
+    store.save_lab_trends(trends)
+    return _ok({"status": "ok", "count": len(trends)})

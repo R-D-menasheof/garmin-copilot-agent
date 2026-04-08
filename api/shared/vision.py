@@ -98,12 +98,14 @@ def _parse_llm_items(raw_json: str, timestamp: datetime | None = None) -> list[M
 def analyze_food_image(
     image_bytes: bytes,
     timestamp: datetime | None = None,
+    description: str | None = None,
 ) -> list[MealEntry]:
     """Analyze a food photo using Azure OpenAI vision.
 
     Args:
         image_bytes: Raw image bytes (JPEG, PNG, etc.).
         timestamp: When the meal was consumed (defaults to now).
+        description: Optional user-provided meal description for context.
 
     Returns:
         List of MealEntry objects for each detected food item.
@@ -118,10 +120,14 @@ def analyze_food_image(
     client = _get_openai_client()
     b64_image = base64.b64encode(image_bytes).decode()
 
+    system_prompt = VISION_SYSTEM_PROMPT
+    if description:
+        system_prompt += f"\n\nThe user describes this meal as: {description}. Use this context to improve accuracy."
+
     response = client.chat.completions.create(
         model=_get_deployment(),
         messages=[
-            {"role": "system", "content": VISION_SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {
                 "role": "user",
                 "content": [

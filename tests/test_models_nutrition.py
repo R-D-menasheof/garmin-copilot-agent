@@ -14,14 +14,31 @@ from pydantic import ValidationError
 from vitalis.models import (
     AnalysisSummary,
     BiometricsRecord,
+    ChecklistItem,
+    CorrelationRelationship,
     DailyNutritionLog,
+    GoalProgram,
+    HealthCorrelation,
     HealthRecommendation,
     KnownFood,
+    LabDataPoint,
+    LabStatus,
+    LabTrend,
     MealEntry,
+    Milestone,
+    NudgeRule,
     NutritionGoal,
     NutritionSource,
     RecStatus,
     RecommendationStatus,
+    SleepChecklist,
+    SleepEntry,
+    TimelineCategory,
+    TimelineEvent,
+    TimelineSeverity,
+    TrainingProgram,
+    TrainingSession,
+    TrainingWeek,
 )
 
 
@@ -304,3 +321,152 @@ class TestRecommendationStatus:
         restored = RecommendationStatus.model_validate(data)
         assert restored.rec_id == "abc123"
         assert restored.status == RecStatus.DONE
+
+
+# ── NudgeRule ─────────────────────────────────────────────────────
+
+
+class TestNudgeRule:
+    def test_creation(self) -> None:
+        rule = NudgeRule(
+            condition="sleep_hours < 6",
+            message_he="לילה קצר — יום קל מומלץ",
+            category="recovery",
+            priority=1,
+        )
+        assert rule.condition == "sleep_hours < 6"
+        assert rule.priority == 1
+
+    def test_json_roundtrip(self) -> None:
+        rule = NudgeRule(
+            condition="resting_hr > 70",
+            message_he="דופק מנוחה גבוה",
+            category="health",
+        )
+        data = rule.model_dump(mode="json")
+        restored = NudgeRule.model_validate(data)
+        assert restored.condition == "resting_hr > 70"
+
+    def test_analysis_summary_with_nudge_rules(self) -> None:
+        summary = _summary(
+            nudge_rules=[
+                NudgeRule(
+                    condition="sleep_hours < 6",
+                    message_he="לילה קצר",
+                    category="sleep",
+                )
+            ]
+        )
+        assert len(summary.nudge_rules) == 1
+        # Backward compat: no nudge_rules → empty list
+        s2 = _summary()
+        assert s2.nudge_rules == []
+
+
+# ── TimelineEvent ─────────────────────────────────────────────────
+
+
+class TestTimelineEvent:
+    def test_creation(self) -> None:
+        event = TimelineEvent(
+            date=date(2026, 1, 18),
+            category=TimelineCategory.MEDICAL,
+            title_he="כבד שומני",
+            detail_he="אולטרסאונד בטן — כבד שומני קל",
+            severity=TimelineSeverity.WARNING,
+        )
+        assert event.category == "medical"
+        assert event.severity == "warning"
+
+    def test_json_roundtrip(self) -> None:
+        event = TimelineEvent(
+            date=date(2026, 3, 13),
+            category=TimelineCategory.MEDICATION,
+            title_he="הפסקת Telfast",
+        )
+        data = event.model_dump(mode="json")
+        restored = TimelineEvent.model_validate(data)
+        assert restored.title_he == "הפסקת Telfast"
+
+
+# ── HealthCorrelation ─────────────────────────────────────────────
+
+
+class TestHealthCorrelation:
+    def test_creation(self) -> None:
+        corr = HealthCorrelation(
+            metric_a="sleep_hours",
+            metric_b="hrv_nightly",
+            relationship=CorrelationRelationship.POSITIVE,
+            description_he="HRV גבוה ב-35% אחרי 7+ שעות שינה",
+            evidence="4 weeks of data",
+            confidence=0.85,
+            discovered_date=date(2026, 4, 4),
+        )
+        assert corr.confidence == 0.85
+
+    def test_analysis_summary_with_correlations(self) -> None:
+        summary = _summary()
+        assert summary.correlations == []
+
+
+# ── TrainingProgram ───────────────────────────────────────────────
+
+
+class TestTrainingProgram:
+    def test_creation(self) -> None:
+        session = TrainingSession(
+            day="ראשון", type="swimming", description="אירובי 800m",
+            duration_min=45, target_hr_zone=2,
+        )
+        week = TrainingWeek(week_number=1, sessions=[session])
+        program = TrainingProgram(
+            name="מבצע VO2max 40", goal="vo2max", duration_weeks=8, weeks=[week],
+        )
+        assert program.active is True
+        assert len(program.weeks[0].sessions) == 1
+
+    def test_session_completion(self) -> None:
+        s = TrainingSession(day="Mon", type="swim")
+        assert s.completed is False
+
+
+# ── GoalProgram ───────────────────────────────────────────────────
+
+
+class TestGoalProgram:
+    def test_creation(self) -> None:
+        m = Milestone(title_he="שקילה שבועית", target_metric="weight_kg", target_value=100)
+        program = GoalProgram(
+            name_he="פרויקט 100 ק\"ג", duration_weeks=12, milestones=[m],
+        )
+        assert program.active is True
+        assert len(program.milestones) == 1
+
+
+# ── SleepEntry ────────────────────────────────────────────────────
+
+
+class TestSleepEntry:
+    def test_creation(self) -> None:
+        entry = SleepEntry(date=date(2026, 4, 4), rating=4, bedtime="23:00")
+        assert entry.rating == 4
+
+    def test_checklist(self) -> None:
+        item = ChecklistItem(id="caffeine", label_he="ללא קפאין אחרי 14:00", category="habits")
+        checklist = SleepChecklist(items=[item])
+        assert len(checklist.items) == 1
+
+
+# ── LabTrend ──────────────────────────────────────────────────────
+
+
+class TestLabTrend:
+    def test_creation(self) -> None:
+        point = LabDataPoint(
+            date=date(2025, 9, 3), value=116.4, unit="mg/dL",
+            reference_range="<130", status=LabStatus.NORMAL,
+        )
+        trend = LabTrend(metric="LDL", display_name_he="כולסטרול LDL", values=[point])
+        assert len(trend.values) == 1
+        assert trend.values[0].value == 116.4

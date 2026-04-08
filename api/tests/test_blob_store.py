@@ -15,12 +15,26 @@ import pytest
 from shared.blob_store import BlobStore
 from vitalis.models import (
     BiometricsRecord,
+    GoalProgram,
     KnownFood,
+    LabDataPoint,
+    LabStatus,
+    LabTrend,
     MealEntry,
+    Milestone,
     NutritionGoal,
     NutritionSource,
     RecStatus,
     RecommendationStatus,
+    SleepChecklist,
+    SleepEntry,
+    ChecklistItem,
+    TimelineCategory,
+    TimelineEvent,
+    TimelineSeverity,
+    TrainingProgram,
+    TrainingSession,
+    TrainingWeek,
 )
 
 
@@ -265,6 +279,119 @@ class TestRecommendationStatus:
         result = store.load_recommendation_statuses()
         assert len(result) == 1
         assert result[0].status == RecStatus.DONE
+
+
+# ── Timeline ──────────────────────────────────────────────────────
+
+
+class TestTimeline:
+    def test_save_and_load(self, store_and_backend) -> None:
+        store, backend = store_and_backend
+        event = TimelineEvent(
+            date=date(2026, 1, 18), category=TimelineCategory.MEDICAL,
+            title_he="כבד שומני", severity=TimelineSeverity.WARNING,
+        )
+        store.save_timeline_events([event])
+        result = store.load_timeline_events()
+        assert len(result) == 1
+        assert result[0].title_he == "כבד שומני"
+
+    def test_append_event(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        e1 = TimelineEvent(date=date(2026, 1, 1), category=TimelineCategory.LIFESTYLE, title_he="A")
+        e2 = TimelineEvent(date=date(2026, 2, 1), category=TimelineCategory.MILESTONE, title_he="B")
+        store.append_timeline_event(e1)
+        store.append_timeline_event(e2)
+        assert len(store.load_timeline_events()) == 2
+
+    def test_load_empty(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        assert store.load_timeline_events() == []
+
+
+# ── Training Programs ─────────────────────────────────────────────
+
+
+class TestTrainingPrograms:
+    def test_save_and_load(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        program = TrainingProgram(
+            name="Test", goal="vo2max", duration_weeks=4,
+            weeks=[TrainingWeek(week_number=1, sessions=[
+                TrainingSession(day="Mon", type="swim", duration_min=45),
+            ])],
+        )
+        store.save_training_program(program)
+        loaded = store.load_active_training_program()
+        assert loaded is not None
+        assert loaded.name == "Test"
+        assert len(loaded.weeks[0].sessions) == 1
+
+    def test_load_none(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        assert store.load_active_training_program() is None
+
+
+# ── Goal Programs ─────────────────────────────────────────────────
+
+
+class TestGoalPrograms:
+    def test_save_and_load(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        program = GoalProgram(
+            name_he="פרויקט 100", duration_weeks=12,
+            milestones=[Milestone(title_he="שקילה")],
+        )
+        store.save_goal_program(program)
+        # Can't easily test list_blobs with InMemoryBlobStore, just verify save doesn't error
+
+
+# ── Sleep Protocol ────────────────────────────────────────────────
+
+
+class TestSleepProtocol:
+    def test_save_and_load_protocol(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        checklist = SleepChecklist(items=[
+            ChecklistItem(id="caffeine", label_he="ללא קפאין אחרי 14:00", category="habits"),
+        ])
+        store.save_sleep_protocol(checklist)
+        loaded = store.load_sleep_protocol()
+        assert loaded is not None
+        assert len(loaded.items) == 1
+
+    def test_save_and_load_entry(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        entry = SleepEntry(date=date(2026, 4, 4), rating=4, bedtime="23:00")
+        store.save_sleep_entry(entry)
+        entries = store.load_sleep_entries(date(2026, 4, 4), date(2026, 4, 4))
+        assert len(entries) == 1
+        assert entries[0].rating == 4
+
+    def test_load_empty(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        assert store.load_sleep_protocol() is None
+        assert store.load_sleep_entries(date(2026, 4, 4), date(2026, 4, 4)) == []
+
+
+# ── Lab Trends ────────────────────────────────────────────────────
+
+
+class TestLabTrends:
+    def test_save_and_load(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        trend = LabTrend(
+            metric="LDL", display_name_he="כולסטרול LDL",
+            values=[LabDataPoint(date=date(2025, 9, 3), value=116.4, unit="mg/dL")],
+        )
+        store.save_lab_trends([trend])
+        loaded = store.load_lab_trends()
+        assert len(loaded) == 1
+        assert loaded[0].metric == "LDL"
+
+    def test_load_empty(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        assert store.load_lab_trends() == []
 
 
 # ── Food Cache ────────────────────────────────────────────────────

@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:provider/provider.dart';
 
+import '../models/health_data_models.dart';
 import '../models/recommendation_status.dart';
+import '../models/timeline_event.dart';
 import '../providers/recommendation_provider.dart';
 import '../providers/summary_provider.dart';
+import '../services/api_client.dart';
 import '../widgets/trend_chart.dart';
 
 class WeeklyReviewScreen extends StatefulWidget {
@@ -36,15 +39,18 @@ class _WeeklyReviewScreenState extends State<WeeklyReviewScreen> {
     final latest = summaryProvider.latestSummary;
 
     return DefaultTabController(
-      length: 3,
+      length: 5,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('סקירה שבועית'),
           bottom: const TabBar(
+            isScrollable: true,
             tabs: [
               Tab(text: 'משימות'),
               Tab(text: 'דוח'),
               Tab(text: 'מגמות'),
+              Tab(text: 'ציר זמן'),
+              Tab(text: 'מעבדה'),
             ],
           ),
         ),
@@ -57,6 +63,8 @@ class _WeeklyReviewScreenState extends State<WeeklyReviewScreen> {
                       _TodoTab(summary: latest),
                       _ReportTab(summary: latest),
                       const _TrendsTab(),
+                      const _TimelineTab(),
+                      const _LabTrendsTab(),
                     ],
                   ),
       ),
@@ -280,5 +288,199 @@ class _TrendsTab extends StatelessWidget {
           ),
       ],
     );
+  }
+}
+
+class _TimelineTab extends StatefulWidget {
+  const _TimelineTab();
+
+  @override
+  State<_TimelineTab> createState() => _TimelineTabState();
+}
+
+class _TimelineTabState extends State<_TimelineTab> {
+  List<TimelineEvent> _events = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() async {
+      try {
+        final api = context.read<SummaryProvider>();
+        // Load timeline from API through a direct call
+        final client = Provider.of<ApiClient>(context, listen: false);
+        final events = await client.getTimeline();
+        if (mounted) setState(() { _events = events; _loading = false; });
+      } catch (_) {
+        if (mounted) setState(() => _loading = false);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_events.isEmpty) {
+      return const Center(child: Text('אין אירועים בציר הזמן'));
+    }
+
+    // Sort newest first
+    final sorted = [..._events]..sort((a, b) => b.date.compareTo(a.date));
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: sorted.length,
+      itemBuilder: (context, index) {
+        final event = sorted[index];
+        return _buildTimelineItem(context, event, isLast: index == sorted.length - 1);
+      },
+    );
+  }
+
+  Widget _buildTimelineItem(BuildContext context, TimelineEvent event, {bool isLast = false}) {
+    final color = _categoryColor(event.category);
+    final icon = _severityIcon(event.severity);
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Timeline line + dot
+          SizedBox(
+            width: 40,
+            child: Column(
+              children: [
+                Container(
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, size: 10, color: Colors.white),
+                ),
+                if (!isLast)
+                  Expanded(
+                    child: Container(width: 2, color: color.withAlpha(60)),
+                  ),
+              ],
+            ),
+          ),
+          // Content
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        event.date.toIso8601String().split('T').first,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        event.titleHe,
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      if (event.detailHe.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(event.detailHe),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _categoryColor(String category) {
+    switch (category) {
+      case 'medical': return Colors.red;
+      case 'milestone': return Colors.green;
+      case 'medication': return Colors.blue;
+      case 'lifestyle': return Colors.purple;
+      default: return Colors.grey;
+    }
+  }
+
+  IconData _severityIcon(String severity) {
+    switch (severity) {
+      case 'critical': return Icons.warning;
+      case 'warning': return Icons.info;
+      case 'positive': return Icons.star;
+      default: return Icons.circle;
+    }
+  }
+}
+
+class _LabTrendsTab extends StatefulWidget {
+  const _LabTrendsTab();
+
+  @override
+  State<_LabTrendsTab> createState() => _LabTrendsTabState();
+}
+
+class _LabTrendsTabState extends State<_LabTrendsTab> {
+  List<LabTrend> _trends = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() async {
+      try {
+        final client = Provider.of<ApiClient>(context, listen: false);
+        final trends = await client.getLabTrends();
+        if (mounted) setState(() { _trends = trends; _loading = false; });
+      } catch (_) {
+        if (mounted) setState(() => _loading = false);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_trends.isEmpty) {
+      return const Center(child: Text('אין נתוני מעבדה עדיין'));
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        for (final trend in _trends)
+          if (trend.values.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: TrendChart(
+                title: trend.displayNameHe.isNotEmpty ? trend.displayNameHe : trend.metric,
+                unit: trend.values.first.unit,
+                color: _labColor(trend.metric),
+                data: trend.values
+                    .map((v) => (v.date, v.value))
+                    .toList(),
+              ),
+            ),
+      ],
+    );
+  }
+
+  Color _labColor(String metric) {
+    switch (metric.toLowerCase()) {
+      case 'ldl': return Colors.red;
+      case 'hdl': return Colors.blue;
+      case 'hba1c': return Colors.purple;
+      case 'vitamin_d': return Colors.orange;
+      case 'glucose': return Colors.teal;
+      default: return Colors.grey;
+    }
   }
 }

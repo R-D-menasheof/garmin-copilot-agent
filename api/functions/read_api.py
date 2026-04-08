@@ -227,3 +227,73 @@ def get_recommendation_statuses(req) -> "HttpResponse":
     store = _get_blob_store()
     statuses = store.load_recommendation_statuses()
     return _ok({"statuses": [s.model_dump(mode="json") for s in statuses]})
+
+
+def get_timeline(req) -> "HttpResponse":
+    """GET /api/v1/timeline — return health timeline events."""
+    if not verify_api_key(req):
+        return _error("Unauthorized", 401)
+
+    store = _get_blob_store()
+    events = store.load_timeline_events()
+    return _ok({"events": [e.model_dump(mode="json") for e in events]})
+
+
+def get_active_training(req) -> "HttpResponse":
+    """GET /api/v1/training/active — return active training program."""
+    if not verify_api_key(req):
+        return _error("Unauthorized", 401)
+
+    store = _get_blob_store()
+    program = store.load_active_training_program()
+    return _ok({"program": None if program is None else program.model_dump(mode="json")})
+
+
+def get_goal_programs(req) -> "HttpResponse":
+    """GET /api/v1/goals/programs — return all goal programs."""
+    if not verify_api_key(req):
+        return _error("Unauthorized", 401)
+
+    store = _get_blob_store()
+    programs = store.load_goal_programs()
+    return _ok({"programs": [p.model_dump(mode="json") for p in programs]})
+
+
+def get_sleep_protocol(req) -> "HttpResponse":
+    """GET /api/v1/sleep/protocol — return sleep checklist."""
+    if not verify_api_key(req):
+        return _error("Unauthorized", 401)
+
+    store = _get_blob_store()
+    protocol = store.load_sleep_protocol()
+    return _ok({"protocol": None if protocol is None else protocol.model_dump(mode="json")})
+
+
+def get_sleep_entries(req) -> "HttpResponse":
+    """GET /api/v1/sleep/entries?from=&to= — return sleep log entries."""
+    if not verify_api_key(req):
+        return _error("Unauthorized", 401)
+
+    from_str = req.params.get("from")
+    to_str = req.params.get("to")
+    if not from_str or not to_str:
+        return _error("'from' and 'to' query params required")
+
+    start = _parse_date(from_str)
+    end = _parse_date(to_str)
+    if start is None or end is None:
+        return _error("Invalid date format, use YYYY-MM-DD")
+
+    store = _get_blob_store()
+    entries = store.load_sleep_entries(start, end)
+    return _ok({"entries": [e.model_dump(mode="json") for e in entries]})
+
+
+def get_lab_trends(req) -> "HttpResponse":
+    """GET /api/v1/medical/lab-trends — return parsed lab trends."""
+    if not verify_api_key(req):
+        return _error("Unauthorized", 401)
+
+    store = _get_blob_store()
+    trends = store.load_lab_trends()
+    return _ok({"trends": [t.model_dump(mode="json") for t in trends]})

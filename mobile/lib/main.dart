@@ -5,18 +5,24 @@ import 'package:provider/provider.dart';
 
 import 'providers/biometrics_provider.dart';
 import 'providers/favorites_provider.dart';
+import 'providers/goals_program_provider.dart';
 import 'providers/goals_provider.dart';
 import 'providers/meal_provider.dart';
 import 'providers/plan_provider.dart';
 import 'providers/recommendation_provider.dart';
+import 'providers/sleep_provider.dart';
 import 'providers/summary_provider.dart';
 import 'providers/templates_provider.dart';
+import 'providers/training_provider.dart';
 import 'screens/dashboard_screen.dart';
+import 'screens/goals_screen.dart';
 import 'screens/health_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/log_meal_screen.dart';
 import 'screens/meal_plan_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/sleep_screen.dart';
+import 'screens/training_screen.dart';
 import 'screens/weekly_review_screen.dart';
 import 'services/api_client.dart';
 import 'services/health_connect.dart';
@@ -52,6 +58,9 @@ void main() {
         ChangeNotifierProvider(create: (_) => GoalsProvider(apiClient)),
         ChangeNotifierProvider(create: (_) => SummaryProvider(apiClient)),
         ChangeNotifierProvider(create: (_) => RecommendationProvider(apiClient)),
+        ChangeNotifierProvider(create: (_) => SleepProvider(apiClient)),
+        ChangeNotifierProvider(create: (_) => TrainingProvider(apiClient)),
+        ChangeNotifierProvider(create: (_) => GoalsProgramProvider(apiClient)),
         ChangeNotifierProvider(create: (_) {
           final provider = BiometricsProvider(
             healthConnect,
@@ -111,6 +120,18 @@ final _router = GoRouter(
     GoRoute(
       path: '/plan',
       builder: (_, __) => const MealPlanScreen(),
+    ),
+    GoRoute(
+      path: '/sleep',
+      builder: (_, __) => const SleepScreen(),
+    ),
+    GoRoute(
+      path: '/training',
+      builder: (_, __) => const TrainingScreen(),
+    ),
+    GoRoute(
+      path: '/goals',
+      builder: (_, __) => const GoalsScreen(),
     ),
   ],
 );
