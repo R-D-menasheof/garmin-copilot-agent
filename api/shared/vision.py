@@ -29,14 +29,15 @@ this image and return a JSON array of items with their estimated nutritional val
 
 For each food item visible, return:
 {
-  "food_name": "name in the user's language",
+  "food_name": "שם המאכל בעברית",
   "calories": estimated_kcal_for_visible_portion,
   "protein_g": grams,
   "carbs_g": grams,
   "fat_g": grams,
-  "portion_description": "e.g., 1 plate, ~200g"
+  "portion_description": "e.g., צלחת אחת, ~200 גרם"
 }
 
+IMPORTANT: Always write food_name and portion_description in Hebrew.
 Be specific about portions. If unsure, give your best estimate with a note.
 Return ONLY valid JSON array, no markdown."""
 

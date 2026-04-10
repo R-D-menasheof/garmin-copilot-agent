@@ -72,12 +72,14 @@ def analyze_image(req) -> "HttpResponse":
     if not image_b64:
         return _error("'image' field (base64) required")
 
+    description = body.get("description", "")
+
     try:
         image_bytes = base64.b64decode(image_b64)
     except Exception:
         return _error("Invalid base64 image data")
 
-    meals = analyze_food_image(image_bytes)
+    meals = analyze_food_image(image_bytes, description=description or None)
     if asyncio.iscoroutine(meals):
         meals = _run_async(meals)
     del image_bytes

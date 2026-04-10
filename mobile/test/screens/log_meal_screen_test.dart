@@ -118,7 +118,15 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.byIcon(Icons.camera_alt));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump();
+
+      // Description dialog appears — dismiss it (press confirm without text)
+      final confirmButton = find.text('ניתוח');
+      if (confirmButton.evaluate().isNotEmpty) {
+        await tester.tap(confirmButton);
+        await tester.pumpAndSettle();
+      }
 
       expect(imageService.captureCalls, 1);
       // Meal card renders but may not show raw food_name text in CPC version

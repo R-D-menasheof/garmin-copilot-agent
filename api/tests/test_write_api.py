@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from functions.write_api import post_meal, post_goals, post_biometrics, post_recommendation_status
+from functions.write_api import post_meal, post_goals, post_biometrics, post_recommendation_status, put_timeline
 from vitalis.models import MealEntry, NutritionGoal, NutritionSource, RecStatus, RecommendationStatus
 
 
@@ -218,3 +218,57 @@ class TestPostRecommendationStatus:
         req = _make_request({"rec_id": "abc", "status": "invalid"})
         resp = post_recommendation_status(req)
         assert resp.status_code == 400
+
+
+# ── Put Timeline ──────────────────────────────────────────────────
+
+
+class TestPutTimeline:
+    @patch("functions.write_api._get_blob_store")
+    @patch("functions.write_api.verify_api_key", return_value=True)
+    def test_replaces_all_events(self, _auth, mock_store_fn) -> None:
+        store = MagicMock()
+        mock_store_fn.return_value = store
+
+        body = {
+            "events": [
+                {
+                    "date": "2025-09-03",
+                    "category": "medical",
+                    "title_he": "בדיקת דם",
+                    "detail_he": "LDL 116",
+                    "severity": "warning",
+                    "source": "agent",
+                },
+                {
+                    "date": "2026-03-01",
+                    "category": "lifestyle",
+                    "title_he": "הפחתת שתייה מתוקה",
+                    "detail_he": "הפחתה משמעותית",
+                    "severity": "positive",
+                    "source": "agent",
+                },
+            ],
+        }
+        req = _make_request(body)
+        resp = put_timeline(req)
+
+        assert resp.status_code == 200
+        store.save_timeline_events.assert_called_once()
+        saved = store.save_timeline_events.call_args[0][0]
+        assert len(saved) == 2
+        assert saved[0].title_he == "בדיקת דם"
+        assert saved[1].category == "lifestyle"
+
+    @patch("functions.write_api.verify_api_key", return_value=True)
+    def test_invalid_event_returns_400(self, _auth) -> None:
+        body = {"events": [{"bad": "data"}]}
+        req = _make_request(body)
+        resp = put_timeline(req)
+        assert resp.status_code == 400
+
+    @patch("functions.write_api.verify_api_key", return_value=False)
+    def test_unauthorized(self, _auth) -> None:
+        req = _make_request({"events": []})
+        resp = put_timeline(req)
+        assert resp.status_code == 401

@@ -286,6 +286,30 @@ def post_timeline_event(req) -> "HttpResponse":
     return _ok({"status": "ok", "event": event.model_dump(mode="json")})
 
 
+def put_timeline(req) -> "HttpResponse":
+    """PUT /api/v1/timeline — replace all timeline events."""
+    if not verify_api_key(req):
+        return _error("Unauthorized", 401)
+
+    try:
+        body = json.loads(req.get_body())
+        events = [TimelineEvent.model_validate(item) for item in body["events"]]
+    except (KeyError, TypeError, ValueError, ValidationError) as e:
+        return _error(f"Invalid timeline data: {e}")
+
+    store = _get_blob_store()
+    store.save_timeline_events(events)
+
+    logger.info("Replaced timeline with %d events", len(events))
+    return _ok(
+        {
+            "status": "ok",
+            "events": [e.model_dump(mode="json") for e in events],
+        },
+        status_code=200,
+    )
+
+
 def post_training_program(req) -> "HttpResponse":
     """POST /api/v1/training — save a training program."""
     if not verify_api_key(req):

@@ -157,7 +157,15 @@ The `vitalis-meta` JSON block stays **in English** — it's machine-readable for
 12. **Hebrew prose** with English technical terms (VO2max, HRV, BB, SpO2, REM, RHR, BMI)
 13. **Long and detailed** — the report should be comprehensive, include explanations, not a brief summary
 14. **Publish to mobile app** — after saving the summary, run `python scripts/publish_summary.py --date YYYY-MM-DD` to push it to the API. The script reads the raw `.md` file and includes it as `report_markdown` in the API payload so the mobile app can render the full Hebrew report.
-15. **Write 3-5 nudge rules** in the `nudge_rules` array — simple condition-based rules the mobile app evaluates daily against Health Connect data. Conditions use format: `metric_name operator value` (e.g., `sleep_hours < 6`). Supported metrics: `sleep_hours`, `resting_hr`, `steps`, `hrv_ms`, `spo2_pct`, `sleep_score`. Messages must be Hebrew and actionable.
+15. **Write 3-5 nudge rules** in the `nudge_rules` array — condition-based rules the mobile app evaluates daily against Health Connect biometrics:
+    - **Condition format**: `metric_name operator value` (e.g., `sleep_hours < 7`, `resting_hr > 66`). Operators: `<`, `>`, `<=`, `>=`.
+    - **Supported metrics**: `sleep_hours` (from sleepSeconds/3600), `resting_hr`, `steps`, `hrv_ms`, `spo2_pct`, `sleep_score`.
+    - **Calibrate to user**: set thresholds based on the user's actual baselines from this analysis period, NOT generic values. If avg sleep is 5.9h, a good threshold is `sleep_hours < 7` (not `< 6`). If RHR baseline is 64, use `resting_hr > 62` or `> 66`.
+    - **Messages**: Hebrew, actionable, specific — tell the user what to do TODAY.
+    - **Priority**: 1-2 = warning (orange card in app), 3-5 = suggestion (blue card).
+    - **Coverage**: include at least one rule per domain — sleep, recovery/heart, activity.
+    - **Include 1 safety-net rule** with a threshold beyond their normal range (e.g., `resting_hr > 70` when baseline is 64) — fires only on genuinely bad days.
+    - **Demo data**: the app's demo mode uses sleep=7.0h, RHR=64, steps=8200, spo2=97. Ensure at least 2 rules fire with demo data so the feature is testable on non-Android devices.
 16. **Write 2-3 correlations** in the `correlations` array — cross-domain patterns discovered during analysis (see `correlation-engine` skill). Only include correlations with 4+ data points and confidence > 0.6.
 17. **Add timeline events** — after saving the summary, check for milestone events (new personal records, medication changes, medical events, lifestyle changes) and POST each to `/api/v1/timeline` using `scripts/add_timeline_event.py`.
 

@@ -219,7 +219,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
               target: fatTarget,
               color: Colors.red,
             ),
+            const SizedBox(height: 24),
+            // Quick access cards
+            Text('כלים', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                _quickCard(context, Icons.bedtime, 'שינה', Colors.indigo, '/sleep'),
+                const SizedBox(width: 8),
+                _quickCard(context, Icons.pool, 'אימונים', Colors.teal, '/training'),
+                const SizedBox(width: 8),
+                _quickCard(context, Icons.flag, 'יעדים', Colors.orange, '/goals'),
+              ],
+            ),
         ],
+      ),
+    );
+  }
+
+  Widget _quickCard(BuildContext ctx, IconData icon, String label, Color color, String route) {
+    return Expanded(
+      child: Card(
+        child: InkWell(
+          onTap: () => ctx.push(route),
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              children: [
+                Icon(icon, color: color, size: 28),
+                const SizedBox(height: 6),
+                Text(label, style: Theme.of(ctx).textTheme.bodySmall),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

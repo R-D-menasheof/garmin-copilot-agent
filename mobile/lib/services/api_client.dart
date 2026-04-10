@@ -197,12 +197,16 @@ class ApiClient {
 
   // ── Ingestion API ────────────────────────────────────────
 
-  Future<List<MealEntry>> analyzeImage(Uint8List imageBytes) async {
+  Future<List<MealEntry>> analyzeImage(Uint8List imageBytes, {String? description}) async {
     final uri = Uri.parse('$baseUrl/v1/analyze-image');
+    final payload = <String, dynamic>{'image': base64Encode(imageBytes)};
+    if (description != null && description.isNotEmpty) {
+      payload['description'] = description;
+    }
     final resp = await _httpClient.post(
       uri,
       headers: _headers,
-      body: jsonEncode({'image': base64Encode(imageBytes)}),
+      body: jsonEncode(payload),
     );
     _checkResponse(resp);
     final body = jsonDecode(resp.body) as Map<String, dynamic>;

@@ -45,6 +45,7 @@ from functions.write_api import (
     post_sleep_entry,
     post_lab_trends,
     put_meals,
+    put_timeline,
 )
 from functions.ingestion import analyze_image, analyze_text, lookup_barcode
 
@@ -200,6 +201,11 @@ def api_post_recommendation_status(req: func.HttpRequest) -> func.HttpResponse:
 @app.route(route="v1/timeline", methods=["POST"])
 def api_post_timeline_event(req: func.HttpRequest) -> func.HttpResponse:
     return post_timeline_event(req)
+
+
+@app.route(route="v1/timeline", methods=["PUT"])
+def api_put_timeline(req: func.HttpRequest) -> func.HttpResponse:
+    return put_timeline(req)
 
 
 @app.route(route="v1/training", methods=["POST"])

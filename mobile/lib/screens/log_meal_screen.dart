@@ -71,7 +71,21 @@ class _LogMealScreenState extends State<LogMealScreen> {
         return;
       }
 
-      final meals = await context.read<MealProvider>().analyzeImage(imageBytes);
+      // Ask for optional description
+      String? description;
+      if (mounted) {
+        description = await _promptForText(
+          title: 'תיאור הארוחה',
+          label: 'תיאור (אופציונלי)',
+          hint: 'למשל: שווארמה בפיתה עם חומוס',
+          confirmLabel: 'ניתוח',
+        );
+      }
+
+      final meals = await context.read<MealProvider>().analyzeImage(
+        imageBytes,
+        description: description,
+      );
       await _persistMeals(meals);
     } catch (e) {
       _showError(e);

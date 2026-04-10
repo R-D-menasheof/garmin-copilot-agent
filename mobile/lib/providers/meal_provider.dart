@@ -95,8 +95,8 @@ class MealProvider extends ChangeNotifier {
 
   Future<List<MealEntry>> analyzeText(String text) => _api.analyzeText(text);
 
-  Future<List<MealEntry>> analyzeImage(Uint8List imageBytes) =>
-      _api.analyzeImage(imageBytes);
+  Future<List<MealEntry>> analyzeImage(Uint8List imageBytes, {String? description}) =>
+      _api.analyzeImage(imageBytes, description: description);
 
     Future<List<MealEntry>> lookupBarcode(String barcode) =>
       _api.lookupBarcode(barcode);

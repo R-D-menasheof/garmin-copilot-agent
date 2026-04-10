@@ -52,7 +52,15 @@ Generate the report **immediately** — do not wait for user answers.
 8. Write comprehensive **Hebrew** report with English technical terms
 9. Write summary to `data/summaries/YYYY-MM-DD.md` with `vitalis-meta` JSON block
 10. **Publish to mobile app**: run `python scripts/publish_summary.py --date YYYY-MM-DD` — this pushes the summary (with full report markdown) to the API so the mobile app can display it
-11. **Write nudge rules** in the vitalis-meta block: 3-5 condition-based rules the app evaluates daily (e.g., `sleep_hours < 6 → "יום קל מומלץ"`)
+11. **Write nudge rules** in the vitalis-meta `nudge_rules` array — 3-5 condition-based rules the mobile app evaluates daily against Health Connect biometrics:
+    - **Calibrate thresholds to the user's current data** — use the period's metrics to set thresholds slightly above/below their actual values (e.g., if avg sleep is 5.9h, set threshold at 7h not 6h; if RHR baseline is 64, set threshold at 62 or 66 not 70)
+    - **Supported metrics**: `sleep_hours`, `resting_hr`, `steps`, `hrv_ms`, `spo2_pct`, `sleep_score` — these map directly to `BiometricsRecord` fields in the app
+    - **Condition format**: `metric_name operator value` (operators: `<`, `>`, `<=`, `>=`)
+    - **Messages in Hebrew**, actionable and specific — tell the user what to DO today
+    - **Include 1 rule that won't normally fire** (use a threshold beyond their range) as a safety net for bad days
+    - **Priority 1-2** for warning-level nudges (orange card), **3-5** for gentle suggestions (blue card)
+    - **Cover multiple domains**: at least one sleep, one recovery/fitness, one activity rule
+    - **Demo-aware**: demo data uses sleep=7.0h, RHR=64, steps=8200 — at least 2 rules should fire with demo data so the feature is testable on desktop
 12. **Run correlation analysis** using the `correlation-engine` skill — find 2-3 cross-domain patterns and include them in the report as "🔍 תגליות" section
 13. **Add timeline events** for any milestones, medical events, medication changes, or lifestyle changes discovered during analysis — run `python scripts/add_timeline_event.py` for each
 14. **Update goal programs** if active — load from `/v1/goals/programs`, update milestone `current_value` based on latest data, report progress
