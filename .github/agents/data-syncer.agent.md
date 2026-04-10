@@ -43,6 +43,15 @@ When Garmin blocks programmatic login:
 1. Run: `python scripts/import_medical.py --file <path> --category <cat> --date <date> --title <title>`
 2. Categories: `blood_tests`, `doctor_visits`, `imaging`, `prescriptions`, `vaccinations`
 3. Verify import by checking `data/medical/index.json`
+4. If the imported document is a **blood test** and it contains trendable numeric lab values (for example LDL, HDL, total cholesterol, triglycerides, glucose, HbA1c, ALT, AST, creatinine, eGFR, Vitamin D, ferritin, B12, TSH, CRP), update the app-facing `lab trends` dataset via `POST /api/v1/medical/lab-trends` so the medical tab in the app stays consistent with `data/medical/`
+5. After updating lab trends, verify with `GET /api/v1/medical/lab-trends` that the new dates/values are present
+
+### Lab Trends Sync Rule
+
+- **Do not stop at importing PDFs** when the user imported blood tests for historical context
+- `data/medical/` is the local record store, but the mobile app's **Lab Trends** tab reads a separate API dataset
+- When importing multi-year blood tests, merge the new values into the existing lab trend series instead of leaving the app on stale seed data
+- Do **not** update lab trends for non-lab medical documents such as imaging, prescriptions, or generic doctor summaries unless they contain concrete lab values worth charting
 
 ## CLI Reference
 
@@ -64,6 +73,7 @@ backend/.venv/Scripts/python.exe scripts/import_medical.py --rebuild-index
 - If sync fails, suggest: retry, check internet, or try a shorter date range
 - **Always use the virtual environment**: `backend/.venv/Scripts/python.exe` on Windows
 - Report results in Hebrew: "סנכרנתי X סוגי נתונים מ-DATE עד DATE"
+- For blood-test imports, success means **both** `data/medical/` updated **and** app `lab trends` updated when relevant
 
 ## Constraints
 

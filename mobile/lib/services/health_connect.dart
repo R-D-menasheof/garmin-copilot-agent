@@ -71,9 +71,7 @@ class PluginHealthClient implements HealthClient {
 
   @override
   Future<void> configure({bool useHealthConnectIfAvailable = false}) {
-    return _health.configure(
-      useHealthConnectIfAvailable: useHealthConnectIfAvailable,
-    );
+    return _health.configure();
   }
 
   @override
@@ -92,7 +90,8 @@ class PluginHealthClient implements HealthClient {
       types: types,
       startTime: startTime,
       endTime: endTime,
-      includeManualEntry: includeManualEntry,
+      recordingMethodsToFilter:
+          includeManualEntry ? const [] : const [RecordingMethod.manual],
     );
   }
 
@@ -265,8 +264,7 @@ class HealthConnectService {
     final floorsClimbed =
         _sumValues(points, HealthDataType.FLIGHTS_CLIMBED)?.round();
     final distanceMeters = _sumValues(points, HealthDataType.DISTANCE_DELTA);
-    final moveMinutes =
-        _sumValues(points, HealthDataType.MOVE_MINUTES)?.round();
+    final moveMinutes = null; // EXERCISE_TIME is iOS-only; unavailable on Android
     final sleepSeconds = _durationSeconds(points, HealthDataType.SLEEP_SESSION);
     final deepSleepSeconds =
         _durationSeconds(points, HealthDataType.SLEEP_DEEP);

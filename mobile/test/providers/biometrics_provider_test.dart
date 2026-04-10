@@ -84,6 +84,7 @@ HealthDataPoint _numericPoint({
   DateTime? to,
 }) {
   return HealthDataPoint(
+    uuid: '${type.name}-${from.millisecondsSinceEpoch}',
     value: NumericHealthValue(numericValue: value),
     type: type,
     unit: dataTypeToUnit[type] ?? HealthDataUnit.NO_UNIT,

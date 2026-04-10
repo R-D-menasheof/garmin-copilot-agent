@@ -23,18 +23,18 @@ Vitalis uses a **coordinator + specialist** multi-agent pattern:
 
 ### Key Prompts
 
-| Prompt            | What it does                                              |
-| ----------------- | --------------------------------------------------------- |
-| `/weekly-review`  | Full weekly analysis: sync → analyze → report → questions |
-| `/daily-check`    | Quick daily health check                                  |
-| `/sync-garmin`    | Sync latest Garmin data                                   |
-| `/compare-days`   | Compare specific days side by side                        |
-| `/meal-plan`      | Personalized nutrition advice                             |
-| `/training-plan`  | Weekly workout plan                                       |
-| `/explain-labs`   | Blood test interpretation                                 |
-| `/import-medical` | Import medical document                                   |
-| `/scaffold-mobile`| Scaffold Flutter app + Azure Functions API                 |
-| `/implement-feature`| Implement a PRD feature with TDD                        |
+| Prompt               | What it does                                              |
+| -------------------- | --------------------------------------------------------- |
+| `/weekly-review`     | Full weekly analysis: sync → analyze → report → questions |
+| `/daily-check`       | Quick daily health check                                  |
+| `/sync-garmin`       | Sync latest Garmin data                                   |
+| `/compare-days`      | Compare specific days side by side                        |
+| `/meal-plan`         | Personalized nutrition advice                             |
+| `/training-plan`     | Weekly workout plan                                       |
+| `/explain-labs`      | Blood test interpretation                                 |
+| `/import-medical`    | Import medical document                                   |
+| `/scaffold-mobile`   | Scaffold Flutter app + Azure Functions API                |
+| `/implement-feature` | Implement a PRD feature with TDD                          |
 
 ## Core Principles
 
@@ -67,30 +67,32 @@ Analysis is done by the Copilot agent (you), NOT by code. The code layer handles
 
 Each data concern has **exactly one owning module**. Never duplicate logic.
 
-| Concern                  | SSOT Module                    | What it owns                                  |
-| ------------------------ | ------------------------------ | --------------------------------------------- |
-| Garmin API interaction   | `src/vitalis/garmin_client.py` | Auth, session, raw data fetching (30+ types)  |
-| Raw data persistence     | `src/vitalis/data_store.py`    | Date-stamped folders in `data/synced/`        |
-| User profile             | `src/vitalis/profile.py`       | `data/profile.yaml` (manual + auto-synced)    |
-| Agent memory (summaries) | `src/vitalis/summary_store.py` | `data/summaries/*.md`                         |
-| Medical records          | `src/vitalis/medical_store.py` | `data/medical/` (import, extract, index)      |
-| Data shapes              | `src/vitalis/models.py`        | Pydantic models (AnalysisSummary, etc.)       |
-| Sync CLI                 | `scripts/sync.py`              | Command-line sync with date args              |
-| Medical import CLI       | `scripts/import_medical.py`    | Import medical documents into Vitalis         |
-| Metric extraction        | `scripts/extract_metrics.py`   | Structured metric extraction from synced data |
-| Day comparison           | `scripts/compare_days.py`      | Day-level metric extraction and comparison    |
-| Cloud data (Blob)        | `api/shared/blob_store.py`     | Azure Blob Storage ops (meals, goals, biometrics) |
-| External food DBs        | `api/shared/food_lookup.py`    | Open Food Facts + USDA + fuzzy match cache    |
-| LLM food analysis        | `api/shared/vision.py`         | Azure OpenAI vision + NLP food parsing        |
-| Nutrition read CLI       | `scripts/read_nutrition.py`    | External Agent reads combined nutrition data  |
-| Goal setting CLI         | `scripts/set_goals.py`         | External Agent sets weekly nutrition goals    |
-| Summary publishing CLI   | `scripts/publish_summary.py`   | Push summaries (with report_markdown) to API  |
-| Rec status read CLI      | `scripts/read_recommendation_status.py` | Agent reads recommendation adoption status |
-| Timeline event CLI       | `scripts/add_timeline_event.py`| Agent adds health timeline events             |
-| Training program CLI     | `scripts/set_training.py`      | Agent sets structured training programs       |
-| Training read CLI        | `scripts/read_training.py`     | Agent reads active training program           |
-| Goals read CLI           | `scripts/read_goals.py`        | Agent reads goal programs + milestones        |
-| Sleep read CLI           | `scripts/read_sleep.py`        | Agent reads sleep checklist entries           |
+| Concern                  | SSOT Module                             | What it owns                                                |
+| ------------------------ | --------------------------------------- | ----------------------------------------------------------- |
+| Garmin API interaction   | `src/vitalis/garmin_client.py`          | Auth, session, raw data fetching (30+ types)                |
+| Raw data persistence     | `src/vitalis/data_store.py`             | Date-stamped folders in `data/synced/`                      |
+| User profile             | `src/vitalis/profile.py`                | `data/profile.yaml` (manual + auto-synced)                  |
+| Agent memory (summaries) | `src/vitalis/summary_store.py`          | `data/summaries/*.md`                                       |
+| Medical records          | `src/vitalis/medical_store.py`          | `data/medical/` (import, extract, index)                    |
+| Lab trends (app-facing)  | `api/shared/blob_store.py`              | `/api/v1/medical/lab-trends` dataset consumed by mobile app |
+| Data shapes              | `src/vitalis/models.py`                 | Pydantic models (AnalysisSummary, etc.)                     |
+| Sync CLI                 | `scripts/sync.py`                       | Command-line sync with date args                            |
+| Medical import CLI       | `scripts/import_medical.py`             | Import medical documents into Vitalis                       |
+| Lab trends write API     | `api/functions/write_api.py`            | Save app-facing lab trend series                            |
+| Metric extraction        | `scripts/extract_metrics.py`            | Structured metric extraction from synced data               |
+| Day comparison           | `scripts/compare_days.py`               | Day-level metric extraction and comparison                  |
+| Cloud data (Blob)        | `api/shared/blob_store.py`              | Azure Blob Storage ops (meals, goals, biometrics)           |
+| External food DBs        | `api/shared/food_lookup.py`             | Open Food Facts + USDA + fuzzy match cache                  |
+| LLM food analysis        | `api/shared/vision.py`                  | Azure OpenAI vision + NLP food parsing                      |
+| Nutrition read CLI       | `scripts/read_nutrition.py`             | External Agent reads combined nutrition data                |
+| Goal setting CLI         | `scripts/set_goals.py`                  | External Agent sets weekly nutrition goals                  |
+| Summary publishing CLI   | `scripts/publish_summary.py`            | Push summaries (with report_markdown) to API                |
+| Rec status read CLI      | `scripts/read_recommendation_status.py` | Agent reads recommendation adoption status                  |
+| Timeline event CLI       | `scripts/add_timeline_event.py`         | Agent adds health timeline events                           |
+| Training program CLI     | `scripts/set_training.py`               | Agent sets structured training programs                     |
+| Training read CLI        | `scripts/read_training.py`              | Agent reads active training program                         |
+| Goals read CLI           | `scripts/read_goals.py`                 | Agent reads goal programs + milestones                      |
+| Sleep read CLI           | `scripts/read_sleep.py`                 | Agent reads sleep checklist entries                         |
 
 ### 4. Agent Memory Protocol
 

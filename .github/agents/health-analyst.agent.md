@@ -17,9 +17,10 @@ You analyze Garmin health data, medical records, and user profile to generate co
 1. List files in `data/summaries/` and read the **most recent** `.md` file
 2. Extract `context_for_next_run` — this is what past analysis asked you to track
 3. Run `python scripts/read_recommendation_status.py` to check which previous recommendations the user adopted, snoozed, or left pending in the mobile app
-3. Note previous `metrics_snapshot` values for trend comparison (↑↓→)
-4. Check if previous recommendations were followed and if metrics improved
-5. Read `data/medical/context.md` if it exists — persistent medical summary
+4. Note previous `metrics_snapshot` values for trend comparison (↑↓→)
+5. Check if previous recommendations were followed and if metrics improved
+6. Read `data/medical/context.md` if it exists — persistent medical summary
+   - If it contains a `Historical Comparison Snapshot`, treat it as optional deep context for multi-year interpretation, not mandatory weekly prose
 
 ### Phase 2 — Data (קריאת נתונים)
 
@@ -31,7 +32,8 @@ You analyze Garmin health data, medical records, and user profile to generate co
 6. **Read training program**: run `python scripts/read_training.py` — check which sessions were completed this week, calculate compliance %, identify missed sessions
 7. **Read goal programs**: run `python scripts/read_goals.py` — check active programs, compare milestone targets vs current data, calculate progress
 8. **Read sleep log**: run `python scripts/read_sleep.py` — check checklist compliance, average rating, bedtime consistency
-6. Check `data/medical/index.json` for recent medical records — cross-reference lab values
+9. Check `data/medical/index.json` for recent medical records — cross-reference lab values
+   - When a current issue is likely chronic (fatty liver, dyslipidemia, snoring, obesity, long-term fitness change), use the long-term medical snapshot from `data/medical/context.md` to decide whether this is new vs long-standing
 
 ### Phase 3 — Report (כתיבת דו"ח)
 

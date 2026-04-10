@@ -36,6 +36,22 @@ Map<String, dynamic> _summaryJson({String reportMarkdown = ''}) => {
     };
 
 Widget _buildScreen(SummaryProvider provider) {
+  final apiClient = ApiClient(
+    baseUrl: 'http://test/api',
+    apiKey: 'key',
+    httpClient: MockClient((req) async {
+      final uri = req.url;
+      if (uri.path.contains('medical/lab-trends')) {
+        return http.Response(
+          jsonEncode({'trends': []}),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }
+      return http.Response('{}', 404);
+    }),
+  );
+
   // Create a recommendation provider with a no-op API client
   final recMock = MockClient((req) async {
     if (req.method == 'GET') {
@@ -49,6 +65,48 @@ Widget _buildScreen(SummaryProvider provider) {
   );
   return MultiProvider(
     providers: [
+      Provider<ApiClient>.value(value: apiClient),
+      ChangeNotifierProvider.value(value: provider),
+      ChangeNotifierProvider.value(value: recProvider),
+    ],
+    child: const MaterialApp(home: WeeklyReviewScreen()),
+  );
+}
+
+Widget _buildScreenWithLabTrends(
+  SummaryProvider provider, {
+  required List<Map<String, dynamic>> labTrends,
+}) {
+  final apiClient = ApiClient(
+    baseUrl: 'http://test/api',
+    apiKey: 'key',
+    httpClient: MockClient((req) async {
+      final uri = req.url;
+      if (uri.path.contains('medical/lab-trends')) {
+        return http.Response(
+          jsonEncode({'trends': labTrends}),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }
+      return http.Response('{}', 404);
+    }),
+  );
+
+  final recMock = MockClient((req) async {
+    if (req.method == 'GET') {
+      return http.Response(jsonEncode({'statuses': []}), 200,
+          headers: {'content-type': 'application/json; charset=utf-8'});
+    }
+    return http.Response(jsonEncode({'status': 'ok'}), 201);
+  });
+  final recProvider = RecommendationProvider(
+    ApiClient(baseUrl: 'http://test/api', apiKey: 'key', httpClient: recMock),
+  );
+
+  return MultiProvider(
+    providers: [
+      Provider<ApiClient>.value(value: apiClient),
       ChangeNotifierProvider.value(value: provider),
       ChangeNotifierProvider.value(value: recProvider),
     ],
@@ -144,6 +202,59 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('בקרוב'), findsOneWidget);
+    });
+
+    testWidgets('lab tab hides metrics with fewer than two points', (tester) async {
+      final provider = _providerWith();
+      await provider.loadLatestSummary();
+
+      final labTrends = [
+        {
+          'metric': 'glucose',
+          'display_name_he': 'גלוקוז',
+          'values': [
+            {
+              'date': '2020-02-26',
+              'value': 85,
+              'unit': 'mg/dL',
+              'reference_range': '70-100',
+              'status': 'normal',
+            },
+            {
+              'date': '2022-09-19',
+              'value': 91,
+              'unit': 'mg/dL',
+              'reference_range': '70-100',
+              'status': 'normal',
+            },
+          ],
+        },
+        {
+          'metric': 'egfr',
+          'display_name_he': 'תפקוד כליות (eGFR)',
+          'values': [
+            {
+              'date': '2025-09-03',
+              'value': 75,
+              'unit': 'mL/min',
+              'reference_range': '>90',
+              'status': 'low',
+            },
+          ],
+        },
+      ];
+
+      await tester.pumpWidget(
+        _buildScreenWithLabTrends(provider, labTrends: labTrends),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('מעבדה'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('גלוקוז (mg/dL)'), findsOneWidget);
+      expect(find.text('תפקוד כליות (eGFR) (mL/min)'), findsNothing);
+      expect(find.text('מוצגים רק מדדים עם לפחות 2 בדיקות.'), findsOneWidget);
     });
   });
 }

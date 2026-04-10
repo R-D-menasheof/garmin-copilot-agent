@@ -20,6 +20,8 @@ Vitalis uses an **agent-first** analysis model. The GitHub Copilot agent reads r
 3. Note previous `metrics_snapshot` values — you will compare against them to show trends (↑↓→)
 4. Note previous recommendations — did the user follow them? Did the metrics improve?
 5. Read `data/medical/context.md` if it exists — this contains the persistent medical summary, active recommendations, and follow-up questions to ask the user
+   - If `context.md` contains a long-term comparison section such as `Historical Comparison Snapshot (2020 → 2022 → 2025)`, treat it as **reference context**, not mandatory weekly output
+   - Use it when the current analysis touches chronic issues (fatty liver, dyslipidemia, snoring, long-term weight trend, fitness change) or when the user asks whether something is new vs longstanding
 6. Run `python scripts/read_recommendation_status.py` to check which recommendations the user marked as done/snoozed in the mobile app. Use this to track adoption in your report.
 
 ### Phase 2 — Data (קריאת נתונים)
@@ -29,6 +31,7 @@ Vitalis uses an **agent-first** analysis model. The GitHub Copilot agent reads r
 3. If you need deeper detail on specific data types (e.g., day-by-day sleep breakdown, individual activity details), read the relevant JSON files from the latest `data/synced/` folder
 4. Read `meta.json` in the sync folder to know which data types are available
 5. Check `data/medical/index.json` for medical records — if recent blood tests, doctor visits, or prescriptions exist, read their `extracted_text` and `parsed_values`. Cross-reference lab values with Garmin metrics (see `medical-records.md` skill for reference ranges and cross-referencing rules)
+   - If historical records span multiple years, you may cite the `Historical Comparison Snapshot` from `data/medical/context.md` to explain long-term trends, but do not add a full historical section to every weekly report unless it changes the medical interpretation
 6. Check `current_medications` in the profile — account for medication effects on Garmin metrics (e.g., beta blockers lower RHR/HRV)
 7. Run `python scripts/read_training.py` — read the active training program. Check which sessions were completed this week vs planned. Calculate compliance %.
 8. Run `python scripts/read_goals.py` — read all goal programs. For each active program, compare milestone targets against this week's actual metrics.

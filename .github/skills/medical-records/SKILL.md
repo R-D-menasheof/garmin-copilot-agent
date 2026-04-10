@@ -92,6 +92,43 @@ Supported formats:
 - **TXT / MD** → read directly
 - **Images (JPG, PNG)** → stored but no text extraction (future OCR)
 
+## Important: Blood Test Import Is Two-Step
+
+When the user imports historical or new **blood tests**, importing the document into `data/medical/` is only the first step.
+
+### Step A — Local medical record
+
+- Import the document into `data/medical/`
+- Rebuild / verify `data/medical/index.json`
+- Add concise `notes` if the important values are obvious and useful for future analysis
+
+### Step B — App-facing lab trends
+
+The mobile app's **Lab Trends** tab does **not** read raw `data/medical/` documents directly. It reads a separate API dataset from `/api/v1/medical/lab-trends`.
+
+If the imported blood test contains chart-worthy numeric values, the agent should also update lab trends so the app reflects the same history.
+
+Typical trend metrics to sync when available:
+
+- Lipids: `LDL`, `HDL`, `total_cholesterol`, `triglycerides`
+- Metabolic: `glucose`, `HbA1c`
+- Liver: `ALT`, `AST`
+- Kidney: `creatinine`, `eGFR`
+- Vitamins / iron: `vitamin_d`, `vitamin_b12`, `ferritin`
+- Inflammation / thyroid: `CRP`, `TSH`
+
+### Lab Trend Sync Rules
+
+- **Merge with existing trend history** — do not overwrite useful later data with an older partial series
+- Use the **actual test date** from the document, not today's date
+- Only include values that are clearly readable and attributable to a specific metric
+- If a document is a clinic summary without explicit numeric labs, import it to `data/medical/` but do not invent lab-trend points
+- After writing trends, verify with `GET /api/v1/medical/lab-trends`
+
+### Why this matters
+
+Without this second step, the app can show stale or incomplete lab charts even though the PDFs were correctly imported into `data/medical/`.
+
 ## Common Lab Values Reference
 
 When interpreting blood test results, use these reference ranges:
@@ -208,6 +245,7 @@ The agent maintains a persistent `context.md` file in `data/medical/` that summa
 - After analyzing medical records (blood tests, imaging reports, etc.)
 - After the user reports health changes (supplements, lifestyle, symptoms)
 - After receiving answers to follow-up questions
+- After importing historical blood tests, especially if they materially change the long-term picture (for example 2020 → 2022 → 2025 comparisons)
 
 ### What it contains
 

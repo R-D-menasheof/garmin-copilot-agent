@@ -453,10 +453,25 @@ class _LabTrendsTabState extends State<_LabTrendsTab> {
       return const Center(child: Text('אין נתוני מעבדה עדיין'));
     }
 
+    final visibleTrends = _trends.where((trend) => trend.values.length >= 2).toList();
+    final hiddenCount = _trends.length - visibleTrends.length;
+
+    if (visibleTrends.isEmpty) {
+      return const Center(child: Text('אין עדיין מספיק בדיקות להצגת מגמות'));
+    }
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        for (final trend in _trends)
+        if (hiddenCount > 0)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              'מוצגים רק מדדים עם לפחות 2 בדיקות.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        for (final trend in visibleTrends)
           if (trend.values.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -464,6 +479,7 @@ class _LabTrendsTabState extends State<_LabTrendsTab> {
                 title: trend.displayNameHe.isNotEmpty ? trend.displayNameHe : trend.metric,
                 unit: trend.values.first.unit,
                 color: _labColor(trend.metric),
+                axisDateFormat: 'MM/yyyy',
                 data: trend.values
                     .map((v) => (v.date, v.value))
                     .toList(),

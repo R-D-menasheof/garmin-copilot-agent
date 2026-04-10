@@ -55,6 +55,7 @@ HealthDataPoint _numericPoint({
   DateTime? to,
 }) {
   return HealthDataPoint(
+    uuid: '${type.name}-${from.millisecondsSinceEpoch}',
     value: NumericHealthValue(numericValue: value),
     type: type,
     unit: dataTypeToUnit[type] ?? HealthDataUnit.NO_UNIT,
@@ -140,6 +141,7 @@ void main() {
     expect(record.steps, 8500);
     expect(record.activeCalories, 420);
     expect(record.totalCalories, 2640);
+    expect(record.exerciseMinutes, isNull); // EXERCISE_TIME is iOS-only
     expect(record.spo2Pct, 97);
     expect(record.weightKg, 111.4);
     expect(record.sleepSeconds, 26100);
