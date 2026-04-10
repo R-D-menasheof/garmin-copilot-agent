@@ -5,8 +5,19 @@ import '../models/sleep_models.dart';
 import '../providers/sleep_provider.dart';
 
 /// Sleep protocol screen — evening checklist + morning rating.
-class SleepScreen extends StatelessWidget {
+class SleepScreen extends StatefulWidget {
   const SleepScreen({super.key});
+
+  @override
+  State<SleepScreen> createState() => _SleepScreenState();
+}
+
+class _SleepScreenState extends State<SleepScreen> {
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() => context.read<SleepProvider>().loadProtocol());
+  }
 
   @override
   Widget build(BuildContext context) {

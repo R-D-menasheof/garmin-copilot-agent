@@ -4,8 +4,19 @@ import 'package:provider/provider.dart';
 import '../providers/training_provider.dart';
 
 /// Training program screen — weekly view with session cards.
-class TrainingScreen extends StatelessWidget {
+class TrainingScreen extends StatefulWidget {
   const TrainingScreen({super.key});
+
+  @override
+  State<TrainingScreen> createState() => _TrainingScreenState();
+}
+
+class _TrainingScreenState extends State<TrainingScreen> {
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() => context.read<TrainingProvider>().loadActiveProgram());
+  }
 
   @override
   Widget build(BuildContext context) {

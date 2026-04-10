@@ -23,12 +23,12 @@ class SleepProvider extends ChangeNotifier {
     try {
       _checklist = await _api.getSleepProtocol();
     } catch (_) {
-      // Use default checklist
-      _checklist ??= _defaultChecklist();
-    } finally {
-      _loading = false;
-      notifyListeners();
+      // Ignore API errors
     }
+    // Always fall back to default checklist if none loaded
+    _checklist ??= _defaultChecklist();
+    _loading = false;
+    notifyListeners();
   }
 
   void toggleChecklistItem(String itemId, bool checked) {

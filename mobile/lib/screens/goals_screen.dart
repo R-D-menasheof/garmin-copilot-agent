@@ -4,8 +4,19 @@ import 'package:provider/provider.dart';
 import '../providers/goals_program_provider.dart';
 
 /// Goal programs screen — active programs with progress bars.
-class GoalsScreen extends StatelessWidget {
+class GoalsScreen extends StatefulWidget {
   const GoalsScreen({super.key});
+
+  @override
+  State<GoalsScreen> createState() => _GoalsScreenState();
+}
+
+class _GoalsScreenState extends State<GoalsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() => context.read<GoalsProgramProvider>().loadPrograms());
+  }
 
   @override
   Widget build(BuildContext context) {
