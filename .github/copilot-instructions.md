@@ -88,6 +88,9 @@ Each data concern has **exactly one owning module**. Never duplicate logic.
 | Rec status read CLI      | `scripts/read_recommendation_status.py` | Agent reads recommendation adoption status |
 | Timeline event CLI       | `scripts/add_timeline_event.py`| Agent adds health timeline events             |
 | Training program CLI     | `scripts/set_training.py`      | Agent sets structured training programs       |
+| Training read CLI        | `scripts/read_training.py`     | Agent reads active training program           |
+| Goals read CLI           | `scripts/read_goals.py`        | Agent reads goal programs + milestones        |
+| Sleep read CLI           | `scripts/read_sleep.py`        | Agent reads sleep checklist entries           |
 
 ### 4. Agent Memory Protocol
 

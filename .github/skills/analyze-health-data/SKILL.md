@@ -30,6 +30,9 @@ Vitalis uses an **agent-first** analysis model. The GitHub Copilot agent reads r
 4. Read `meta.json` in the sync folder to know which data types are available
 5. Check `data/medical/index.json` for medical records — if recent blood tests, doctor visits, or prescriptions exist, read their `extracted_text` and `parsed_values`. Cross-reference lab values with Garmin metrics (see `medical-records.md` skill for reference ranges and cross-referencing rules)
 6. Check `current_medications` in the profile — account for medication effects on Garmin metrics (e.g., beta blockers lower RHR/HRV)
+7. Run `python scripts/read_training.py` — read the active training program. Check which sessions were completed this week vs planned. Calculate compliance %.
+8. Run `python scripts/read_goals.py` — read all goal programs. For each active program, compare milestone targets against this week's actual metrics.
+9. Run `python scripts/read_sleep.py` — read sleep checklist entries for the period. Check compliance rate, average rating, bedtime patterns.
 
 ### Phase 3 — Report (כתיבת דו"ח)
 

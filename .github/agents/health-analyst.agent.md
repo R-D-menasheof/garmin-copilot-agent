@@ -28,6 +28,9 @@ You analyze Garmin health data, medical records, and user profile to generate co
 3. Run `python scripts/compare_days.py <dates>` for day-level detail
 4. Read `data/synced/` → `meta.json` to know available data types
 5. Read individual JSON files only when you need deeper granularity
+6. **Read training program**: run `python scripts/read_training.py` — check which sessions were completed this week, calculate compliance %, identify missed sessions
+7. **Read goal programs**: run `python scripts/read_goals.py` — check active programs, compare milestone targets vs current data, calculate progress
+8. **Read sleep log**: run `python scripts/read_sleep.py` — check checklist compliance, average rating, bedtime consistency
 6. Check `data/medical/index.json` for recent medical records — cross-reference lab values
 
 ### Phase 3 — Report (כתיבת דו"ח)
@@ -63,7 +66,10 @@ Generate the report **immediately** — do not wait for user answers.
     - **Demo-aware**: demo data uses sleep=7.0h, RHR=64, steps=8200 — at least 2 rules should fire with demo data so the feature is testable on desktop
 12. **Run correlation analysis** using the `correlation-engine` skill — find 2-3 cross-domain patterns and include them in the report as "🔍 תגליות" section
 13. **Add timeline events** for any milestones, medical events, medication changes, or lifestyle changes discovered during analysis — run `python scripts/add_timeline_event.py` for each
-14. **Update goal programs** if active — load from `/v1/goals/programs`, update milestone `current_value` based on latest data, report progress
+14. **Review & update programs** during the report:
+    - **Training program**: Report compliance ("השלמת 3/4 אימונים השבוע"). If all sessions in a week are done, acknowledge it. If the program needs adjustment (e.g., user is consistently skipping strength days), suggest modifications to the fitness-coach.
+    - **Goal program milestones**: Update `current_value` for each milestone based on latest data (e.g., weight from latest weigh-in, sleep hours from this week's avg). POST updated program back to `/v1/goals/programs`. Report progress in Hebrew: "פרויקט 100 ק"ג — שבוע 3/16, משקל 112→111 ק"ג, 12% התקדמות"
+    - **Sleep protocol**: Report checklist compliance ("השלמת צ'קליסט שינה 4/7 לילות, דירוג ממוצע 3.5"). Correlate with actual sleep data from Garmin. If compliance is high but sleep is still poor, adjust the protocol.
 
 **Why mandatory?** Each agent has domain expertise:
 
