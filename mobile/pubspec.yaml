@@ -24,6 +24,7 @@ dependencies:
   flutter_markdown: ^0.7.0
   crypto: ^3.0.0
   fl_chart: ^0.69.0
+  shared_preferences: ^2.2.0
 
 dev_dependencies:
   flutter_test:

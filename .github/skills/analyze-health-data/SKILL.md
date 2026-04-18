@@ -36,6 +36,7 @@ Vitalis uses an **agent-first** analysis model. The GitHub Copilot agent reads r
 7. Run `python scripts/read_training.py` — read the active training program. Check which sessions were completed this week vs planned. Calculate compliance %.
 8. Run `python scripts/read_goals.py` — read all goal programs. For each active program, compare milestone targets against this week's actual metrics.
 9. Run `python scripts/read_sleep.py` — read sleep checklist entries for the period. Check compliance rate, average rating, bedtime patterns.
+10. Run `python scripts/read_nutrition.py --from YYYY-MM-DD --to YYYY-MM-DD` — read meals logged in the mobile app for the period. This calls `GET /api/v1/combined` and returns `nutrition` (per-day list of food entries with calories, protein, carbs, fat, timestamp) and `biometrics` (daily totals). Requires `VITALIS_API_URL` and `VITALIS_API_KEY` env vars (production: `https://func-vitalis-api.azurewebsites.net/api`). If the call fails (no network / API down), log it and continue without nutrition — do not block the report.
 
 ### Phase 3 — Report (כתיבת דו"ח)
 
@@ -96,7 +97,10 @@ The report should be **long and detailed**, including:
 (משקל, שומן גוף, BMI, מגמות)
 
 ## תזונה (Nutrition)
-(הידרציה, קלוריות אם זמין, הקשר להעדפות תזונתיות)
+(טבלת יום-יום עם קלוריות, חלבון, פחמימות, שומן, מספר ארוחות מתועדות)
+(חלבון יומי מול יעד g/kg, דפוסי אכילה לילית, מזונות מעובדים דומיננטיים)
+(אחוז ימי תיעוד, ימים חסרים)
+(למה זה חשוב — חלבון ל-recovery, אכילה לילית ↔ שינה, עקביות תיעוד)
 
 ## בריאות כללית (General Health)
 (SpO2, צעדים, קומות, דקות אינטנסיביות, WHO target)
@@ -149,10 +153,15 @@ The report should be **long and detailed**, including:
 
 ### תזונה (Nutrition)
 
-- Caloric intake vs expenditure (if data available)
-- Hydration levels
-- Contextualise with dietary preferences from profile
-- **Why it matters**: Recovery requires adequate protein (1.6-2.2g/kg for active individuals) and hydration.
+- **Logged meals** (from `read_nutrition.py`): per-day calorie total, protein total, carbs total, fat total. Flag days with no logging.
+- **Protein target**: 1.6-2.2g/kg for active individuals. Compare daily actual vs target.
+- **Calorie target**: compare daily actual vs TDEE (BMR from profile + active_calories from Garmin). Flag large surpluses or deficits.
+- **Meal timing patterns**: flag late-night eating (>22:00) — cross-reference with next-day sleep quality and HRV.
+- **Food quality patterns**: note frequency of processed/high-fat items (נקניק, בורקס, בצק, גלידה) vs whole foods (ביצים, יוגורט, ירקות, בשר רזה).
+- **Logging compliance**: count days with ≥1 entry vs days with no entries.
+- **Hydration** (if available from Garmin or profile)
+- Contextualise with `dietary_preferences` from profile
+- **Why it matters**: Recovery requires adequate protein (1.6-2.2g/kg). Late-night eating impairs deep sleep and fasting glucose. Consistent logging is the #1 predictor of long-term dietary change.
 
 ### בריאות כללית (General Health)
 

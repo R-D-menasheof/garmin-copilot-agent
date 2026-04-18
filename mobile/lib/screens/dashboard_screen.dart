@@ -36,7 +36,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final goal = goals.currentGoal;
     final latestSummary = summary.latestSummary;
 
-    final caloriesTarget = goal?.caloriesTarget ?? 2200;
+    final caloriesTarget = goal?.todayCaloriesTarget ?? 2200;
     final proteinTarget = goal?.proteinGTarget ?? 180;
     final carbsTarget = goal?.carbsGTarget ?? 250;
     final fatTarget = goal?.fatGTarget ?? 70;

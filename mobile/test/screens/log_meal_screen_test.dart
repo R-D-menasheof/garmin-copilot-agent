@@ -3,13 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:http/testing.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:vitalis/screens/log_meal_screen.dart';
 import 'package:vitalis/providers/meal_provider.dart';
 import 'package:vitalis/providers/favorites_provider.dart';
-import 'package:vitalis/providers/templates_provider.dart';
 import 'package:vitalis/services/api_client.dart';
 import 'package:vitalis/services/image_service.dart';
 
@@ -30,6 +30,7 @@ void main() {
   late ApiClient client;
 
   setUp(() {
+    SharedPreferences.setMockInitialValues({});
     final mockClient = MockClient((req) async {
       if (req.url.path.contains('/v1/favorites')) {
         return http.Response(jsonEncode({'favorites': []}), 200);
@@ -51,7 +52,6 @@ void main() {
       providers: [
         ChangeNotifierProvider(create: (_) => mealProvider ?? MealProvider(api)),
         ChangeNotifierProvider(create: (_) => FavoritesProvider(api)),
-        ChangeNotifierProvider(create: (_) => TemplatesProvider(api)),
         if (imageService != null) Provider<ImageService>.value(value: imageService),
       ],
       child: const MaterialApp(home: LogMealScreen()),
@@ -62,7 +62,7 @@ void main() {
     testWidgets('renders text input field', (tester) async {
       await tester.pumpWidget(_wrapLogMeal(client));
 
-      expect(find.byType(TextField), findsOneWidget);
+      expect(find.byType(TextField), findsWidgets);
       expect(find.text('רישום ארוחה'), findsOneWidget);
     });
 

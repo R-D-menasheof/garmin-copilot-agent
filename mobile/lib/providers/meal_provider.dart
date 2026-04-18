@@ -5,15 +5,19 @@ import 'package:flutter/foundation.dart';
 
 import '../models/meal_entry.dart';
 import '../services/api_client.dart';
+import '../services/frequent_foods.dart';
 
 /// State management for meal logging and daily totals.
 class MealProvider extends ChangeNotifier {
   final ApiClient _api;
+  final FrequentFoodsService _frequentFoods = FrequentFoodsService();
 
   final Map<String, List<MealEntry>> _mealsByDay = <String, List<MealEntry>>{};
   final Set<String> _loadingDays = <String>{};
   final Map<String, String?> _errorsByDay = <String, String?>{};
   List<MealEntry> _recentMeals = <MealEntry>[];
+
+  FrequentFoodsService get frequentFoods => _frequentFoods;
 
   List<MealEntry> get todayMeals => mealsForDay(DateTime.now());
   List<MealEntry> get recentMeals => List.unmodifiable(_recentMeals);
@@ -73,6 +77,8 @@ class MealProvider extends ChangeNotifier {
       ..add(savedMeal);
     _mealsByDay[key] = meals;
     _errorsByDay.remove(key);
+    // Track in local frequency cache
+    await _frequentFoods.record(savedMeal);
     notifyListeners();
   }
 
@@ -103,6 +109,11 @@ class MealProvider extends ChangeNotifier {
 
   Future<void> loadRecents({int limit = 10}) async {
     _recentMeals = await _api.getRecents(limit: limit);
+    notifyListeners();
+  }
+
+  Future<void> loadFrequentFoods() async {
+    await _frequentFoods.load();
     notifyListeners();
   }
 

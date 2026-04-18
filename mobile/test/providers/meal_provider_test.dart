@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:vitalis/providers/meal_provider.dart';
 import 'package:vitalis/services/api_client.dart';
@@ -12,6 +13,10 @@ String _dateKey(DateTime day) =>
   '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   group('MealProvider', () {
     late MealProvider provider;
     late ApiClient client;

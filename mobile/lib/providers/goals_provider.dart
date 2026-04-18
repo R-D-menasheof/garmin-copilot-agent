@@ -29,12 +29,17 @@ class GoalsProvider extends ChangeNotifier {
     }
   }
 
+  /// Today's calorie target (rest-day aware).
+  int get todayCaloriesTarget =>
+      _currentGoal?.todayCaloriesTarget ?? 2200;
+
   /// Calculate compliance percentage given actual intake.
   double? compliancePct(int actualCalories) {
-    if (_currentGoal == null || _currentGoal!.caloriesTarget == 0) {
+    final target = _currentGoal?.todayCaloriesTarget ?? 0;
+    if (_currentGoal == null || target == 0) {
       return null;
     }
-    return (actualCalories / _currentGoal!.caloriesTarget * 100)
+    return (actualCalories / target * 100)
         .clamp(0, 200)
         .toDouble();
   }

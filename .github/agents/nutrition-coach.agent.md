@@ -17,6 +17,7 @@ Before giving advice, read:
 2. Latest `data/summaries/*.md` — activity calories, sleep, stress
 3. `data/medical/index.json` → blood test results (lipids, glucose, vitamins, liver markers)
 4. `data/synced/*/daily_stats.json` — active calories, BMR calories
+5. `python scripts/read_nutrition.py --from YYYY-MM-DD --to YYYY-MM-DD` — actual meals the user logged in the mobile app (per-day food list with calories, protein, carbs, fat, timestamp). **This is ground truth — use it before giving any calorie/macro advice.** Requires `VITALIS_API_URL` and `VITALIS_API_KEY` env vars.
 
 ## Domains
 

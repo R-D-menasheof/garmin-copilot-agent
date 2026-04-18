@@ -52,6 +52,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--fat", type=float, required=True,
         help="Daily fat target (grams).",
     )
+    p.add_argument(
+        "--rest-calories", type=int, default=None,
+        help="Rest-day calorie target (kcal). Optional.",
+    )
+    p.add_argument(
+        "--rest-carbs", type=float, default=None,
+        help="Rest-day carbs target (grams). Optional.",
+    )
     return p.parse_args(argv)
 
 
@@ -60,16 +68,20 @@ def send_goals(
     protein: float,
     carbs: float,
     fat: float,
+    rest_calories: int | None = None,
+    rest_carbs: float | None = None,
     api_url: str | None = None,
     api_key: str | None = None,
 ) -> dict:
     """Call POST /api/v1/goals to set nutrition targets.
 
     Args:
-        calories: Daily calorie target.
+        calories: Daily calorie target (training days).
         protein: Daily protein target (grams).
-        carbs: Daily carbs target (grams).
+        carbs: Daily carbs target (grams, training days).
         fat: Daily fat target (grams).
+        rest_calories: Rest-day calorie target. Optional.
+        rest_carbs: Rest-day carbs target (grams). Optional.
         api_url: Base API URL. Defaults to VITALIS_API_URL env var.
         api_key: API key. Defaults to VITALIS_API_KEY env var.
 
@@ -82,7 +94,7 @@ def send_goals(
     url = api_url or os.environ.get("VITALIS_API_URL", "http://localhost:7071/api")
     key = api_key or os.environ.get("VITALIS_API_KEY", "")
 
-    payload = {
+    payload: dict = {
         "date": date.today().isoformat(),
         "calories_target": calories,
         "protein_g_target": protein,
@@ -90,6 +102,10 @@ def send_goals(
         "fat_g_target": fat,
         "set_by": "agent",
     }
+    if rest_calories is not None:
+        payload["rest_calories_target"] = rest_calories
+    if rest_carbs is not None:
+        payload["rest_carbs_g_target"] = rest_carbs
 
     resp = httpx.post(
         f"{url}/v1/goals",
@@ -108,13 +124,20 @@ def main(argv: list[str] | None = None) -> int:
     """Entry point."""
     args = parse_args(argv)
 
+    rest_info = ""
+    if args.rest_calories:
+        rest_info = f", rest: {args.rest_calories} kcal / {args.rest_carbs or args.carbs}g carbs"
     logger.info(
-        "Setting goals: %d kcal, %.0fg protein, %.0fg carbs, %.0fg fat",
-        args.calories, args.protein, args.carbs, args.fat,
+        "Setting goals: %d kcal, %.0fg protein, %.0fg carbs, %.0fg fat%s",
+        args.calories, args.protein, args.carbs, args.fat, rest_info,
     )
 
     try:
-        result = send_goals(args.calories, args.protein, args.carbs, args.fat)
+        result = send_goals(
+            args.calories, args.protein, args.carbs, args.fat,
+            rest_calories=args.rest_calories,
+            rest_carbs=args.rest_carbs,
+        )
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0
     except Exception as e:

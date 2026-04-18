@@ -3,10 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../models/favorite_meal.dart';
 import '../models/meal_entry.dart';
-import '../models/meal_template.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/meal_provider.dart';
-import '../providers/templates_provider.dart';
+import '../services/frequent_foods.dart';
 import '../services/image_service.dart';
 import '../widgets/meal_card.dart';
 
@@ -20,24 +19,26 @@ class LogMealScreen extends StatefulWidget {
 
 class _LogMealScreenState extends State<LogMealScreen> {
   final _textController = TextEditingController();
+  final _searchController = TextEditingController();
   bool _analyzing = false;
+  bool _searching = false;
+  List<dynamic> _searchResults = [];
 
   @override
   void initState() {
     super.initState();
-    // Load today's meals from Azure on screen open
     Future.microtask(() {
       final provider = context.read<MealProvider>();
       provider.loadToday();
-      provider.loadRecents(limit: 6);
+      provider.loadFrequentFoods();
       context.read<FavoritesProvider>().loadFavorites();
-      context.read<TemplatesProvider>().loadTemplates();
     });
   }
 
   @override
   void dispose() {
     _textController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -182,6 +183,18 @@ class _LogMealScreenState extends State<LogMealScreen> {
     }
   }
 
+  Future<void> _addFrequentFood(FrequentFood food) async {
+    try {
+      await context.read<MealProvider>().addMealCopy(food.toMealEntry());
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${food.foodName} נוסף ✓')),
+      );
+    } catch (error) {
+      _showError(error);
+    }
+  }
+
   Future<void> _addFavoriteMeal(FavoriteMeal favorite) async {
     try {
       await context.read<MealProvider>().addMealCopy(favorite.meal);
@@ -190,27 +203,6 @@ class _LogMealScreenState extends State<LogMealScreen> {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${favorite.displayName} נוסף מהמועדפים ✓')),
-      );
-    } catch (error) {
-      _showError(error);
-    }
-  }
-
-  Future<void> _addTemplate(MealTemplate template) async {
-    final mealProvider = context.read<MealProvider>();
-    final now = DateTime.now();
-    try {
-      for (var index = 0; index < template.meals.length; index += 1) {
-        await mealProvider.addMealCopy(
-          template.meals[index],
-          timestamp: now.add(Duration(minutes: index)),
-        );
-      }
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${template.name} נוספה כתבנית ✓')),
       );
     } catch (error) {
       _showError(error);
@@ -228,40 +220,6 @@ class _LogMealScreenState extends State<LogMealScreen> {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${meal.foodName} נשמר כמועדף ✓')),
-      );
-    } catch (error) {
-      _showError(error);
-    }
-  }
-
-  Future<void> _saveTodayAsTemplate() async {
-    final mealProvider = context.read<MealProvider>();
-    if (mealProvider.todayMeals.isEmpty) {
-      return;
-    }
-
-    final name = await _promptForText(
-      title: 'שמירת תבנית',
-      label: 'שם התבנית',
-      hint: 'לדוגמה: ארוחת בוקר',
-      confirmLabel: 'שמור',
-    );
-
-    if (!mounted || name == null || name.isEmpty) {
-      return;
-    }
-
-    try {
-      await context.read<TemplatesProvider>().addTemplate(
-            name,
-            mealProvider.todayMeals,
-            notes: 'Saved from log screen',
-          );
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$name נשמרה כתבנית ✓')),
       );
     } catch (error) {
       _showError(error);
@@ -314,7 +272,7 @@ class _LogMealScreenState extends State<LogMealScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<MealProvider>();
     final favorites = context.watch<FavoritesProvider>();
-    final templates = context.watch<TemplatesProvider>();
+    final freqFoods = provider.frequentFoods.topN(8);
     return Scaffold(
       appBar: AppBar(title: const Text('רישום ארוחה')),
       body: Column(
@@ -356,19 +314,21 @@ class _LogMealScreenState extends State<LogMealScreen> {
               ],
             ),
           ),
+          // Quick add — frequency-sorted foods
           _buildChipSection(
-            title: 'אחרונים',
-            chips: provider.recentMeals
+            title: 'מהיר ⚡',
+            chips: freqFoods
                 .map(
-                  (meal) => ActionChip(
-                    label: Text(meal.foodName),
-                    onPressed: _analyzing ? null : () => _addRecentMeal(meal),
+                  (food) => ActionChip(
+                    label: Text('${food.foodName} ${food.calories}'),
+                    onPressed: _analyzing ? null : () => _addFrequentFood(food),
                   ),
                 )
                 .toList(),
           ),
+          // Favorites
           _buildChipSection(
-            title: 'מועדפים',
+            title: 'מועדפים ⭐',
             chips: favorites.favorites
                 .map(
                   (favorite) => ActionChip(
@@ -378,28 +338,65 @@ class _LogMealScreenState extends State<LogMealScreen> {
                 )
                 .toList(),
           ),
-          _buildChipSection(
-            title: 'תבניות',
-            chips: templates.templates
-                .map(
-                  (template) => ActionChip(
-                    label: Text(template.name),
-                    onPressed: _analyzing ? null : () => _addTemplate(template),
-                  ),
-                )
-                .toList(),
-          ),
-          if (provider.todayMeals.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: _saveTodayAsTemplate,
-                  icon: const Icon(Icons.bookmark_add_outlined),
-                  label: const Text('שמור כתבנית'),
-                ),
+          // Search history
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              controller: _searchController,
+              textDirection: TextDirection.rtl,
+              decoration: InputDecoration(
+                hintText: '🔍 חיפוש בהיסטוריה...',
+                border: const OutlineInputBorder(),
+                suffixIcon: _searching
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() { _searching = false; _searchResults = []; });
+                        },
+                      )
+                    : null,
               ),
+              onChanged: (query) {
+                final results = provider.frequentFoods.search(query);
+                setState(() {
+                  _searching = query.isNotEmpty;
+                  _searchResults = results;
+                });
+              },
+            ),
+          ),
+          if (_searching && _searchResults.isNotEmpty)
+            Container(
+              constraints: const BoxConstraints(maxHeight: 160),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _searchResults.length,
+                itemBuilder: (context, index) {
+                  final food = _searchResults[index] as FrequentFood;
+                  final daysSince = DateTime.now().difference(food.lastUsed).inDays;
+                  final recency = daysSince == 0
+                      ? 'היום'
+                      : daysSince == 1
+                          ? 'אתמול'
+                          : 'לפני $daysSince ימים';
+                  return ListTile(
+                    dense: true,
+                    title: Text(food.foodName),
+                    subtitle: Text('${food.calories} kcal  •  $recency'),
+                    onTap: () {
+                      _addFrequentFood(food);
+                      _searchController.clear();
+                      setState(() { _searching = false; _searchResults = []; });
+                    },
+                  );
+                },
+              ),
+            ),
+          if (_searching && _searchResults.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(8),
+              child: Text('לא נמצאו תוצאות'),
             ),
           Expanded(
             child: ListView.builder(

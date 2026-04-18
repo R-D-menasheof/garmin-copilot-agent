@@ -44,13 +44,19 @@ class MealEntry(BaseModel):
 
 
 class NutritionGoal(BaseModel):
-    """Daily nutrition targets — set by the user or the External Agent."""
+    """Daily nutrition targets — set by the user or the External Agent.
+
+    Primary fields are for training days. Optional rest-day overrides
+    let the mobile app show different targets on rest/low-intensity days.
+    """
 
     date: DateValue
     calories_target: int = Field(ge=0)
     protein_g_target: float = Field(ge=0)
     carbs_g_target: float = Field(ge=0)
     fat_g_target: float = Field(ge=0)
+    rest_calories_target: Optional[int] = Field(default=None, ge=0)
+    rest_carbs_g_target: Optional[float] = Field(default=None, ge=0)
     set_by: str = Field(pattern=r"^(user|agent)$", description="Who set this goal")
     created_at: datetime = Field(default_factory=datetime.now)
 

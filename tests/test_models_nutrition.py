@@ -126,6 +126,32 @@ class TestNutritionGoal:
                 set_by="robot",  # invalid — must be "user" or "agent"
             )
 
+    def test_rest_day_fields_optional(self) -> None:
+        goal = NutritionGoal(
+            date=date(2026, 4, 4),
+            calories_target=2500,
+            protein_g_target=150.0,
+            carbs_g_target=288.0,
+            fat_g_target=83.0,
+            set_by="agent",
+        )
+        assert goal.rest_calories_target is None
+        assert goal.rest_carbs_g_target is None
+
+    def test_rest_day_fields_set(self) -> None:
+        goal = NutritionGoal(
+            date=date(2026, 4, 4),
+            calories_target=2500,
+            protein_g_target=150.0,
+            carbs_g_target=288.0,
+            fat_g_target=83.0,
+            rest_calories_target=2250,
+            rest_carbs_g_target=200.0,
+            set_by="agent",
+        )
+        assert goal.rest_calories_target == 2250
+        assert goal.rest_carbs_g_target == 200.0
+
 
 # ── DailyNutritionLog ────────────────────────────────────────────
 
