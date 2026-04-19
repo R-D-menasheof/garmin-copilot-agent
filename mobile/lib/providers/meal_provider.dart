@@ -114,6 +114,17 @@ class MealProvider extends ChangeNotifier {
 
   Future<void> loadFrequentFoods() async {
     await _frequentFoods.load();
+    // Seed from API history on first run (empty local cache)
+    if (_frequentFoods.foods.isEmpty) {
+      try {
+        final recents = await _api.getRecents(limit: 30);
+        for (final meal in recents) {
+          await _frequentFoods.record(meal);
+        }
+      } catch (_) {
+        // Offline or API error — will seed next time
+      }
+    }
     notifyListeners();
   }
 
