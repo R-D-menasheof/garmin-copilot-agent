@@ -48,6 +48,9 @@ data/profile.yaml
 data/summaries/*.md
 !data/samples/.gitkeep
 !data/summaries/.gitkeep
+data/csv from garmin/
+data/goal_program.json
+data/training_plan.json
 
 # Medical records — all personal documents ignored
 data/medical/blood_tests/*
