@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 import 'package:vitalis/services/api_client.dart';
+import 'package:vitalis/models/day_tracking_override.dart';
 import 'package:vitalis/models/meal_entry.dart';
 import 'package:vitalis/models/nutrition_source.dart';
 import 'package:vitalis/models/recommendation_status.dart';
@@ -156,6 +157,47 @@ void main() {
       );
 
       await client.getNutrition(DateTime(2026, 4, 4), DateTime(2026, 4, 4));
+    });
+
+    test('getDayOverrides returns list', () async {
+      final mockClient = MockClient((req) async {
+        expect(req.url.path, contains('/v1/nutrition/day-overrides'));
+        return http.Response(
+          jsonEncode({
+            'overrides': [
+              {
+                'date': '2026-07-01',
+                'tracked': false,
+                'note': 'נסעתי',
+                'updated_at': '2026-07-01T20:00:00',
+              },
+            ]
+          }),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      });
+
+      client = ApiClient(baseUrl: 'http://test/api', apiKey: 'key', httpClient: mockClient);
+      final result = await client.getDayOverrides();
+      expect(result, hasLength(1));
+      expect(result.first.date, DateTime(2026, 7, 1));
+      expect(result.first.tracked, false);
+    });
+
+    test('postDayOverride sends correct payload', () async {
+      final mockClient = MockClient((req) async {
+        expect(req.method, 'POST');
+        expect(req.url.path, contains('/v1/nutrition/day-override'));
+        final body = jsonDecode(req.body) as Map<String, dynamic>;
+        expect(body['date'], '2026-07-01');
+        expect(body['tracked'], false);
+        expect(body['note'], 'נסעתי');
+        return http.Response(jsonEncode({'status': 'ok'}), 201);
+      });
+
+      client = ApiClient(baseUrl: 'http://test/api', apiKey: 'key', httpClient: mockClient);
+      await client.postDayOverride(DateTime(2026, 7, 1), false, note: 'נסעתי');
     });
   });
 }

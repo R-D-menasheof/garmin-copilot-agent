@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../providers/goals_provider.dart';
 import '../providers/meal_provider.dart';
+import '../widgets/calendar_week_row.dart';
 import '../widgets/meal_card.dart';
 
 /// History screen — daily meal logs with date navigation.
@@ -14,20 +16,45 @@ class HistoryScreen extends StatefulWidget {
 
 class _HistoryScreenState extends State<HistoryScreen> {
   DateTime _selectedDate = DateTime.now();
+  late DateTime _weekStart = _weekStartFor(_selectedDate);
+
+  static DateTime _weekStartFor(DateTime day) {
+    // DateTime.weekday: Monday=1 ... Sunday=7. Days since the most recent
+    // Sunday (0 when [day] itself is a Sunday).
+    final daysSinceSunday = day.weekday % 7;
+    return DateTime(day.year, day.month, day.day).subtract(Duration(days: daysSinceSunday));
+  }
 
   @override
   void initState() {
     super.initState();
-    Future.microtask(_loadDay);
+    Future.microtask(() {
+      _loadDay();
+      _loadWeek();
+      context.read<MealProvider>().loadDayOverrides();
+    });
   }
 
   Future<void> _loadDay() async {
     await context.read<MealProvider>().loadDay(_selectedDate);
   }
 
+  Future<void> _loadWeek() async {
+    await context.read<MealProvider>().loadRange(_weekStart, _weekStart.add(const Duration(days: 6)));
+  }
+
   bool _isToday(DateTime d) {
     final now = DateTime.now();
     return d.year == now.year && d.month == now.month && d.day == now.day;
+  }
+
+  void _setSelectedDate(DateTime date) {
+    setState(() {
+      _selectedDate = date;
+      _weekStart = _weekStartFor(date);
+    });
+    _loadDay();
+    _loadWeek();
   }
 
   Future<void> _pickDate() async {
@@ -39,21 +66,28 @@ class _HistoryScreenState extends State<HistoryScreen> {
       locale: const Locale('he'),
     );
     if (picked != null && picked != _selectedDate) {
-      setState(() => _selectedDate = picked);
-      _loadDay();
+      _setSelectedDate(picked);
     }
   }
 
   void _prevDay() {
-    setState(() => _selectedDate = _selectedDate.subtract(const Duration(days: 1)));
-    _loadDay();
+    _setSelectedDate(_selectedDate.subtract(const Duration(days: 1)));
   }
 
   void _nextDay() {
     if (!_isToday(_selectedDate)) {
-      setState(() => _selectedDate = _selectedDate.add(const Duration(days: 1)));
-      Future.microtask(_loadDay);
+      _setSelectedDate(_selectedDate.add(const Duration(days: 1)));
     }
+  }
+
+  void _prevWeek() {
+    setState(() => _weekStart = _weekStart.subtract(const Duration(days: 7)));
+    _loadWeek();
+  }
+
+  void _nextWeek() {
+    setState(() => _weekStart = _weekStart.add(const Duration(days: 7)));
+    _loadWeek();
   }
 
   String get _dateLabel {
@@ -65,6 +99,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<MealProvider>();
+    final goal = context.watch<GoalsProvider>().currentGoal;
     final meals = provider.mealsForDay(_selectedDate);
     final loading = provider.isLoadingDay(_selectedDate);
     final error = provider.errorForDay(_selectedDate);
@@ -72,11 +107,29 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final totalProtein = provider.totalProteinForDay(_selectedDate);
     final totalCarbs = provider.totalCarbsForDay(_selectedDate);
     final totalFat = provider.totalFatForDay(_selectedDate);
+    final hasOverride = provider.hasManualOverride(_selectedDate);
+    final weekStatuses = List.generate(
+      7,
+      (i) => provider.statusForDay(_weekStart.add(Duration(days: i)), goal),
+    );
 
     return Scaffold(
       appBar: AppBar(title: const Text('היסטוריה')),
       body: Column(
         children: [
+          // Calendar week row — navigation and pattern recognition
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: CalendarWeekRow(
+              weekStart: _weekStart,
+              selectedDay: _selectedDate,
+              statuses: weekStatuses,
+              onDaySelected: _setSelectedDate,
+              onPrevWeek: _prevWeek,
+              onNextWeek: _nextWeek,
+            ),
+          ),
+
           // Date navigation bar
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -99,6 +152,21 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   onPressed: _isToday(_selectedDate) ? null : _nextDay,
                 ),
               ],
+            ),
+          ),
+
+          // Day tracking override toggle
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => provider.toggleDayOverride(_selectedDate),
+                icon: const Icon(Icons.label_outline, size: 18),
+                label: Text(
+                  hasOverride ? 'בטל סימון' : 'התיעוד לא משקף את היום הזה',
+                ),
+              ),
             ),
           ),
 

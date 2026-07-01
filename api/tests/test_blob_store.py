@@ -15,6 +15,7 @@ import pytest
 from shared.blob_store import BlobStore
 from vitalis.models import (
     BiometricsRecord,
+    DayTrackingOverride,
     GoalProgram,
     KnownFood,
     LabDataPoint,
@@ -392,6 +393,53 @@ class TestLabTrends:
     def test_load_empty(self, store_and_backend) -> None:
         store, _ = store_and_backend
         assert store.load_lab_trends() == []
+
+
+# ── Day Tracking Overrides ─────────────────────────────────────────
+
+
+class TestDayTrackingOverrides:
+    def test_save_day_overrides_creates_blob(self, store_and_backend) -> None:
+        store, backend = store_and_backend
+        override = DayTrackingOverride(date=date(2026, 7, 1), tracked=False)
+        store.save_day_overrides([override])
+
+        raw = backend.get_raw("nutrition/day_overrides.json")
+        assert raw is not None
+        assert len(raw) == 1
+        assert raw[0]["date"] == "2026-07-01"
+        assert raw[0]["tracked"] is False
+
+    def test_load_day_overrides_roundtrip(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        override = DayTrackingOverride(
+            date=date(2026, 7, 1), tracked=False, note="נסעתי"
+        )
+        store.save_day_overrides([override])
+
+        loaded = store.load_day_overrides()
+        assert len(loaded) == 1
+        assert loaded[0].date == date(2026, 7, 1)
+        assert loaded[0].tracked is False
+        assert loaded[0].note == "נסעתי"
+
+    def test_load_day_overrides_empty_returns_empty_list(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        assert store.load_day_overrides() == []
+
+    def test_save_day_overrides_overwrite_existing_date(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        store.save_day_overrides([DayTrackingOverride(date=date(2026, 7, 1), tracked=False)])
+        store.save_day_overrides([
+            DayTrackingOverride(date=date(2026, 7, 1), tracked=True),
+            DayTrackingOverride(date=date(2026, 7, 2), tracked=False),
+        ])
+
+        loaded = store.load_day_overrides()
+        assert len(loaded) == 2
+        by_date = {o.date: o.tracked for o in loaded}
+        assert by_date[date(2026, 7, 1)] is True
+        assert by_date[date(2026, 7, 2)] is False
 
 
 # ── Food Cache ────────────────────────────────────────────────────

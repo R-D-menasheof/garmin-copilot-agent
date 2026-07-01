@@ -10,6 +10,7 @@ import azure.functions as func
 from functions.read_api import (
     get_biometrics,
     get_combined,
+    get_day_overrides,
     get_favorites,
     get_goals,
     get_latest_summary,
@@ -30,6 +31,7 @@ from functions.write_api import (
     delete_favorite,
     delete_template,
     post_biometrics,
+    post_day_override,
     post_favorite,
     post_goals,
     post_meal,
@@ -140,6 +142,11 @@ def api_get_lab_trends(req: func.HttpRequest) -> func.HttpResponse:
     return get_lab_trends(req)
 
 
+@app.route(route="v1/nutrition/day-overrides", methods=["GET"])
+def api_get_day_overrides(req: func.HttpRequest) -> func.HttpResponse:
+    return get_day_overrides(req)
+
+
 # ── Write API ─────────────────────────────────────────────────────
 
 
@@ -236,6 +243,11 @@ def api_post_sleep_entry(req: func.HttpRequest) -> func.HttpResponse:
 @app.route(route="v1/medical/lab-trends", methods=["POST"])
 def api_post_lab_trends(req: func.HttpRequest) -> func.HttpResponse:
     return post_lab_trends(req)
+
+
+@app.route(route="v1/nutrition/day-override", methods=["POST"])
+def api_post_day_override(req: func.HttpRequest) -> func.HttpResponse:
+    return post_day_override(req)
 
 
 # ── Ingestion API ─────────────────────────────────────────────────

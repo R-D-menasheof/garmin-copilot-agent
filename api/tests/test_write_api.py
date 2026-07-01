@@ -11,8 +11,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from functions.write_api import post_meal, post_goals, post_biometrics, post_recommendation_status, put_timeline
-from vitalis.models import MealEntry, NutritionGoal, NutritionSource, RecStatus, RecommendationStatus
+from functions.write_api import (
+    post_biometrics,
+    post_day_override,
+    post_goals,
+    post_meal,
+    post_recommendation_status,
+    put_timeline,
+)
+from vitalis.models import DayTrackingOverride, MealEntry, NutritionGoal, NutritionSource, RecStatus, RecommendationStatus
 
 
 # ── Helpers ───────────────────────────────────────────────────────
@@ -271,4 +278,55 @@ class TestPutTimeline:
     def test_unauthorized(self, _auth) -> None:
         req = _make_request({"events": []})
         resp = put_timeline(req)
+        assert resp.status_code == 401
+
+
+# ── Day Tracking Override ─────────────────────────────────────────
+
+
+class TestPostDayOverride:
+    @patch("functions.write_api._get_blob_store")
+    @patch("functions.write_api.verify_api_key", return_value=True)
+    def test_creates_new_override(self, _auth, mock_store_fn) -> None:
+        store = MagicMock()
+        store.load_day_overrides.return_value = []
+        mock_store_fn.return_value = store
+
+        req = _make_request({"date": "2026-07-01", "tracked": False, "note": "נסעתי"})
+        resp = post_day_override(req)
+
+        assert resp.status_code == 201
+        store.save_day_overrides.assert_called_once()
+        saved = store.save_day_overrides.call_args[0][0]
+        assert len(saved) == 1
+        assert saved[0].date == date(2026, 7, 1)
+        assert saved[0].tracked is False
+
+    @patch("functions.write_api._get_blob_store")
+    @patch("functions.write_api.verify_api_key", return_value=True)
+    def test_updates_existing_override_for_same_date(self, _auth, mock_store_fn) -> None:
+        store = MagicMock()
+        store.load_day_overrides.return_value = [
+            DayTrackingOverride(date=date(2026, 7, 1), tracked=False),
+        ]
+        mock_store_fn.return_value = store
+
+        req = _make_request({"date": "2026-07-01", "tracked": True})
+        resp = post_day_override(req)
+
+        assert resp.status_code == 201
+        saved = store.save_day_overrides.call_args[0][0]
+        assert len(saved) == 1
+        assert saved[0].tracked is True
+
+    @patch("functions.write_api.verify_api_key", return_value=True)
+    def test_invalid_date_returns_400(self, _auth) -> None:
+        req = _make_request({"date": "not-a-date", "tracked": False})
+        resp = post_day_override(req)
+        assert resp.status_code == 400
+
+    @patch("functions.write_api.verify_api_key", return_value=False)
+    def test_unauthorized(self, _auth) -> None:
+        req = _make_request({"date": "2026-07-01", "tracked": False}, headers={})
+        resp = post_day_override(req)
         assert resp.status_code == 401

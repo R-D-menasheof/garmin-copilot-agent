@@ -13,6 +13,7 @@ from shared.blob_store import BlobStore
 from vitalis.models import (
     AnalysisSummary,
     BiometricsRecord,
+    DayTrackingOverride,
     FavoriteMeal,
     GoalProgram,
     KnownFood,
@@ -412,3 +413,35 @@ def post_lab_trends(req) -> "HttpResponse":
     store = _get_blob_store()
     store.save_lab_trends(trends)
     return _ok({"status": "ok", "count": len(trends)})
+
+
+def post_day_override(req) -> "HttpResponse":
+    """POST /api/v1/nutrition/day-override — toggle whether a day counts in balance calcs."""
+    if not verify_api_key(req):
+        return _error("Unauthorized", 401)
+
+    try:
+        body = json.loads(req.get_body())
+        override_date = date.fromisoformat(body["date"])
+        tracked = bool(body["tracked"])
+        note = body.get("note", "")
+    except (json.JSONDecodeError, KeyError, ValueError) as e:
+        return _error(f"Invalid request: {e}")
+
+    store = _get_blob_store()
+    overrides = store.load_day_overrides()
+    from datetime import datetime as dt
+
+    updated = False
+    for o in overrides:
+        if o.date == override_date:
+            o.tracked = tracked
+            o.note = note
+            o.updated_at = dt.now()
+            updated = True
+            break
+    if not updated:
+        overrides.append(DayTrackingOverride(date=override_date, tracked=tracked, note=note))
+
+    store.save_day_overrides(overrides)
+    return _ok({"status": "ok", "date": override_date.isoformat(), "tracked": tracked})

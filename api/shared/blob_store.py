@@ -26,6 +26,7 @@ from azure.storage.blob import BlobServiceClient
 from vitalis.models import (
     AnalysisSummary,
     BiometricsRecord,
+    DayTrackingOverride,
     FavoriteMeal,
     GoalProgram,
     KnownFood,
@@ -386,6 +387,22 @@ class BlobStore:
         if raw is None:
             return []
         return [LabTrend.model_validate(item) for item in json.loads(raw)]
+
+    # ── Day Tracking Overrides ───────────────────────────────────
+
+    def save_day_overrides(self, overrides: list[DayTrackingOverride]) -> None:
+        """Persist day tracking overrides (full list, overwrites blob)."""
+        data = json.dumps(
+            [o.model_dump(mode="json") for o in overrides], ensure_ascii=False,
+        )
+        self._upload("nutrition/day_overrides.json", data)
+
+    def load_day_overrides(self) -> list[DayTrackingOverride]:
+        """Load day tracking overrides."""
+        raw = self._download("nutrition/day_overrides.json")
+        if raw is None:
+            return []
+        return [DayTrackingOverride.model_validate(item) for item in json.loads(raw)]
 
     # ── Combined (External Agent) ──────────────────────────────────
 

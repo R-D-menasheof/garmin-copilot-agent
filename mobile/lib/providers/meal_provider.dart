@@ -3,9 +3,14 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 
+import '../models/day_tracking_override.dart';
 import '../models/meal_entry.dart';
+import '../models/nutrition_goal.dart';
 import '../services/api_client.dart';
 import '../services/frequent_foods.dart';
+
+/// Status of a single day for weekly balance / calendar display purposes.
+enum DayStatus { trackedWithinBudget, trackedExceeded, untracked, future }
 
 /// State management for meal logging and daily totals.
 class MealProvider extends ChangeNotifier {
@@ -15,6 +20,7 @@ class MealProvider extends ChangeNotifier {
   final Map<String, List<MealEntry>> _mealsByDay = <String, List<MealEntry>>{};
   final Set<String> _loadingDays = <String>{};
   final Map<String, String?> _errorsByDay = <String, String?>{};
+  final Map<String, DayTrackingOverride> _overridesByDay = <String, DayTrackingOverride>{};
   List<MealEntry> _recentMeals = <MealEntry>[];
 
   FrequentFoodsService get frequentFoods => _frequentFoods;
@@ -66,6 +72,19 @@ class MealProvider extends ChangeNotifier {
       _errorsByDay[key] = _formatError(e);
     } finally {
       _loadingDays.remove(key);
+      notifyListeners();
+    }
+  }
+
+  /// Loads meals for every day in [start]..[end] (inclusive) in a single
+  /// API call, merging results into the existing per-day cache.
+  Future<void> loadRange(DateTime start, DateTime end) async {
+    try {
+      final meals = await _api.getNutrition(start, end);
+      _mealsByDay.addAll(meals);
+    } catch (_) {
+      // Keep existing data on error.
+    } finally {
       notifyListeners();
     }
   }
@@ -206,6 +225,98 @@ class MealProvider extends ChangeNotifier {
 
   String _dayKey(DateTime day) =>
       '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+
+  // ── Day Tracking Overrides & Weekly Balance ─────────────
+
+  Future<void> loadDayOverrides() async {
+    final overrides = await _api.getDayOverrides();
+    _overridesByDay
+      ..clear()
+      ..addEntries(overrides.map((o) => MapEntry(_dayKey(o.date), o)));
+    notifyListeners();
+  }
+
+  /// Whether [day] counts towards balance calculations: an explicit override
+  /// takes precedence, otherwise a day with at least one logged meal is
+  /// considered tracked.
+  bool isDayTracked(DateTime day) {
+    final override = _overridesByDay[_dayKey(day)];
+    if (override != null) {
+      return override.tracked;
+    }
+    return mealsForDay(day).isNotEmpty;
+  }
+
+  /// Whether [day] has an explicit tracking override set (regardless of its
+  /// value). Used to decide whether a UI toggle should offer to "set" or
+  /// "undo" the override.
+  bool hasManualOverride(DateTime day) => _overridesByDay.containsKey(_dayKey(day));
+
+  /// Flips whether [day] counts in balance calculations and persists it.
+  Future<void> toggleDayOverride(DateTime day) async {
+    final key = _dayKey(day);
+    final newTracked = !isDayTracked(day);
+    final existingNote = _overridesByDay[key]?.note ?? '';
+    _overridesByDay[key] = DayTrackingOverride(
+      date: DateTime(day.year, day.month, day.day),
+      tracked: newTracked,
+      note: existingNote,
+      updatedAt: DateTime.now(),
+    );
+    notifyListeners();
+    await _api.postDayOverride(day, newTracked, note: existingNote.isEmpty ? null : existingNote);
+  }
+
+  int _caloriesTargetForDay(DateTime day, NutritionGoal goal) {
+    final isRest = NutritionGoal.isRestDay(day);
+    return (isRest && goal.restCaloriesTarget != null) ? goal.restCaloriesTarget! : goal.caloriesTarget;
+  }
+
+  /// Sum of (actual - target) calories over the last 7 days (today back 6),
+  /// skipping untracked days entirely. Returns null when [goal] is null.
+  int? rollingWeekBalance(NutritionGoal? goal) {
+    if (goal == null) return null;
+    final today = DateTime.now();
+    final start = DateTime(today.year, today.month, today.day);
+    var balance = 0;
+    for (var i = 0; i < 7; i++) {
+      final day = start.subtract(Duration(days: i));
+      if (!isDayTracked(day)) continue;
+      balance += totalCaloriesForDay(day) - _caloriesTargetForDay(day, goal);
+    }
+    return balance;
+  }
+
+  /// How many of the last 7 days (today back 6) are tracked.
+  int rollingWeekTrackedCount() {
+    final today = DateTime.now();
+    final start = DateTime(today.year, today.month, today.day);
+    var count = 0;
+    for (var i = 0; i < 7; i++) {
+      if (isDayTracked(start.subtract(Duration(days: i)))) count++;
+    }
+    return count;
+  }
+
+  /// Status of [day], used by both the dashboard rolling bar and the
+  /// history calendar row.
+  DayStatus statusForDay(DateTime day, NutritionGoal? goal) {
+    final today = DateTime.now();
+    final normalizedToday = DateTime(today.year, today.month, today.day);
+    final normalizedDay = DateTime(day.year, day.month, day.day);
+
+    if (normalizedDay.isAfter(normalizedToday)) {
+      return DayStatus.future;
+    }
+    if (!isDayTracked(day)) {
+      return DayStatus.untracked;
+    }
+    if (goal == null) {
+      return DayStatus.trackedWithinBudget;
+    }
+    final exceeded = totalCaloriesForDay(day) > _caloriesTargetForDay(day, goal);
+    return exceeded ? DayStatus.trackedExceeded : DayStatus.trackedWithinBudget;
+  }
 
   String _formatError(Object error) {
     if (error is ApiException) {

@@ -17,6 +17,7 @@ from vitalis.models import (
     ChecklistItem,
     CorrelationRelationship,
     DailyNutritionLog,
+    DayTrackingOverride,
     GoalProgram,
     HealthCorrelation,
     HealthRecommendation,
@@ -496,3 +497,30 @@ class TestLabTrend:
         trend = LabTrend(metric="LDL", display_name_he="כולסטרול LDL", values=[point])
         assert len(trend.values) == 1
         assert trend.values[0].value == 116.4
+
+
+# ── DayTrackingOverride ────────────────────────────────────────────
+
+
+class TestDayTrackingOverride:
+    def test_creation(self) -> None:
+        override = DayTrackingOverride(date=date(2026, 7, 1), tracked=False)
+        assert override.date == date(2026, 7, 1)
+        assert override.tracked is False
+        assert override.note == ""
+
+    def test_defaults_tracked_true(self) -> None:
+        override = DayTrackingOverride(date=date(2026, 7, 1))
+        assert override.tracked is True
+
+    def test_json_roundtrip(self) -> None:
+        override = DayTrackingOverride(
+            date=date(2026, 7, 1),
+            tracked=False,
+            note="נסעתי, לא תיעדתי כמו שצריך",
+        )
+        data = override.model_dump(mode="json")
+        restored = DayTrackingOverride.model_validate(data)
+        assert restored.date == date(2026, 7, 1)
+        assert restored.tracked is False
+        assert restored.note == "נסעתי, לא תיעדתי כמו שצריך"

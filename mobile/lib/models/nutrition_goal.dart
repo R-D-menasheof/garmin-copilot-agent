@@ -1,3 +1,6 @@
+import '../services/training_day_service.dart';
+import 'training_program.dart';
+
 /// Daily nutrition targets set by user or External Agent.
 /// Mirrors Python NutritionGoal model.
 class NutritionGoal {
@@ -36,6 +39,20 @@ class NutritionGoal {
   static bool isRestDay([DateTime? day]) {
     final d = day ?? DateTime.now();
     return d.weekday == DateTime.friday || d.weekday == DateTime.saturday;
+  }
+
+  /// Whether [day] is a rest day, training-schedule aware.
+  ///
+  /// If [program] has a scheduled session for [day]'s weekday, that is
+  /// authoritative (a training day is never a rest day, regardless of
+  /// weekend heuristics). Falls back to [isRestDay] when [program] is
+  /// null or has no session for that weekday.
+  static bool isRestDayFor(DateTime day, {TrainingProgram? program}) {
+    final isTraining = TrainingDayService.isTrainingDay(day, program);
+    if (isTraining != null) {
+      return !isTraining;
+    }
+    return isRestDay(day);
   }
 
   /// Calorie target for today (uses rest-day target on Fri/Sat if set).

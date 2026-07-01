@@ -69,6 +69,22 @@ class DailyNutritionLog(BaseModel):
     goal_compliance_pct: Optional[float] = None
 
 
+class DayTrackingOverride(BaseModel):
+    """Marks a day's nutrition log as unreliable/not representative.
+
+    Used to exclude a day from weekly balance calculations without
+    deleting any logged meals (e.g. "I forgot to log properly today").
+    """
+
+    date: DateValue
+    tracked: bool = Field(
+        default=True,
+        description="False = exclude this day from balance calculations",
+    )
+    note: str = ""
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+
 class BiometricsRecord(BaseModel):
     """Daily biometrics from Health Connect / wearable.
 

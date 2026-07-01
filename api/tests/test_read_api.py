@@ -11,8 +11,22 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from functions.read_api import get_nutrition, get_biometrics, get_combined, get_goals, get_recommendation_statuses
-from vitalis.models import BiometricsRecord, MealEntry, NutritionSource, RecStatus, RecommendationStatus
+from functions.read_api import (
+    get_biometrics,
+    get_combined,
+    get_day_overrides,
+    get_goals,
+    get_nutrition,
+    get_recommendation_statuses,
+)
+from vitalis.models import (
+    BiometricsRecord,
+    DayTrackingOverride,
+    MealEntry,
+    NutritionSource,
+    RecStatus,
+    RecommendationStatus,
+)
 
 
 # ── Helpers ───────────────────────────────────────────────────────
@@ -246,4 +260,33 @@ class TestGetRecommendationStatuses:
     def test_unauthorized(self, _auth) -> None:
         req = _make_request({}, headers={})
         resp = get_recommendation_statuses(req)
+        assert resp.status_code == 401
+
+
+# ── Day Tracking Overrides ────────────────────────────────────────
+
+
+class TestGetDayOverrides:
+    @patch("functions.read_api._get_blob_store")
+    @patch("functions.read_api.verify_api_key", return_value=True)
+    def test_returns_list(self, _auth, mock_store_fn) -> None:
+        store = MagicMock()
+        store.load_day_overrides.return_value = [
+            DayTrackingOverride(date=date(2026, 7, 1), tracked=False),
+        ]
+        mock_store_fn.return_value = store
+
+        req = _make_request({})
+        resp = get_day_overrides(req)
+
+        assert resp.status_code == 200
+        body = json.loads(resp.get_body())
+        assert len(body["overrides"]) == 1
+        assert body["overrides"][0]["date"] == "2026-07-01"
+        assert body["overrides"][0]["tracked"] is False
+
+    @patch("functions.read_api.verify_api_key", return_value=False)
+    def test_unauthorized(self, _auth) -> None:
+        req = _make_request({}, headers={})
+        resp = get_day_overrides(req)
         assert resp.status_code == 401

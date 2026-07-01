@@ -297,3 +297,13 @@ def get_lab_trends(req) -> "HttpResponse":
     store = _get_blob_store()
     trends = store.load_lab_trends()
     return _ok({"trends": [t.model_dump(mode="json") for t in trends]})
+
+
+def get_day_overrides(req) -> "HttpResponse":
+    """GET /api/v1/nutrition/day-overrides — return day tracking overrides."""
+    if not verify_api_key(req):
+        return _error("Unauthorized", 401)
+
+    store = _get_blob_store()
+    overrides = store.load_day_overrides()
+    return _ok({"overrides": [o.model_dump(mode="json") for o in overrides]})

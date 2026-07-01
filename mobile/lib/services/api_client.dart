@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import '../models/analysis_summary.dart';
+import '../models/day_tracking_override.dart';
 import '../models/favorite_meal.dart';
 import '../models/goal_program.dart';
 import '../models/health_data_models.dart';
@@ -412,6 +413,32 @@ class ApiClient {
     return (body['trends'] as List? ?? [])
         .map((t) => LabTrend.fromJson(t as Map<String, dynamic>))
         .toList();
+  }
+
+  // ── Day Tracking Overrides ────────────────────────────────
+
+  Future<List<DayTrackingOverride>> getDayOverrides() async {
+    final uri = Uri.parse('$baseUrl/v1/nutrition/day-overrides');
+    final resp = await _httpClient.get(uri, headers: _headers);
+    _checkResponse(resp);
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    return (body['overrides'] as List? ?? [])
+        .map((o) => DayTrackingOverride.fromJson(o as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> postDayOverride(DateTime day, bool tracked, {String? note}) async {
+    final uri = Uri.parse('$baseUrl/v1/nutrition/day-override');
+    final resp = await _httpClient.post(
+      uri,
+      headers: _headers,
+      body: jsonEncode({
+        'date': _formatDate(day),
+        'tracked': tracked,
+        if (note != null) 'note': note,
+      }),
+    );
+    _checkResponse(resp);
   }
 
   // ── Helpers ──────────────────────────────────────────────

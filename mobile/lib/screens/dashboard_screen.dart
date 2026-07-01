@@ -6,8 +6,10 @@ import '../providers/biometrics_provider.dart';
 import '../providers/goals_provider.dart';
 import '../providers/meal_provider.dart';
 import '../providers/summary_provider.dart';
+import '../providers/training_provider.dart';
 import '../services/nudge_evaluator.dart';
 import '../widgets/macro_bar.dart';
+import '../widgets/weekly_balance_bar.dart';
 
 /// Dashboard screen — calories progress, macro breakdown, goal compliance.
 class DashboardScreen extends StatefulWidget {
@@ -25,6 +27,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       context.read<MealProvider>().loadToday();
       context.read<GoalsProvider>().loadGoals();
       context.read<SummaryProvider>().loadLatestSummary();
+      context.read<TrainingProvider>().loadActiveProgram();
+      final today = DateTime.now();
+      context.read<MealProvider>().loadRange(today.subtract(const Duration(days: 6)), today);
+      context.read<MealProvider>().loadDayOverrides();
     });
   }
 
@@ -33,15 +39,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final meals = context.watch<MealProvider>();
     final goals = context.watch<GoalsProvider>();
     final summary = context.watch<SummaryProvider>();
+    final training = context.watch<TrainingProvider>();
     final goal = goals.currentGoal;
     final latestSummary = summary.latestSummary;
 
-    final caloriesTarget = goal?.todayCaloriesTarget ?? 2200;
+    final caloriesTarget = goals.todayCaloriesTarget(activeProgram: training.activeProgram);
     final proteinTarget = goal?.proteinGTarget ?? 180;
     final carbsTarget = goal?.carbsGTarget ?? 250;
     final fatTarget = goal?.fatGTarget ?? 70;
 
-    final compliancePct = goals.compliancePct(meals.totalCalories);
+    final compliancePct = goals.compliancePct(meals.totalCalories, activeProgram: training.activeProgram);
 
     return Scaffold(
       appBar: AppBar(
@@ -90,6 +97,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ],
                 ),
               ),
+            ),
+            const SizedBox(height: 16),
+            WeeklyBalanceBar(
+              balance: meals.rollingWeekBalance(goal),
+              trackedDays: meals.rollingWeekTrackedCount(),
             ),
             const SizedBox(height: 16),
             Card(
