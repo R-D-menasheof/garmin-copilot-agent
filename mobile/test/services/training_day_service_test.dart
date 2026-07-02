@@ -66,5 +66,19 @@ void main() {
       final result = TrainingDayService.isTrainingDay(wednesday, program);
       expect(result, false);
     });
+
+    test('matches English weekday names (real agent data uses "Sunday", "Monday", ...)', () {
+      // 2026-07-05 is a Sunday; 2026-07-08 is a Wednesday.
+      final sunday = DateTime(2026, 7, 5);
+      final wednesday = DateTime(2026, 7, 8);
+
+      final program = _programWith([
+        const TrainingSession(day: 'Sunday', type: 'pilates'),
+        const TrainingSession(day: 'Wednesday', type: 'rest'),
+      ]);
+
+      expect(TrainingDayService.isTrainingDay(sunday, program), true);
+      expect(TrainingDayService.isTrainingDay(wednesday, program), false);
+    });
   });
 }

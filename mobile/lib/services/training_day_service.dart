@@ -3,17 +3,19 @@ import '../models/training_program.dart';
 /// Determines whether a given date is a training day, based on the
 /// scheduled sessions in an active [TrainingProgram].
 class TrainingDayService {
-  /// Hebrew weekday names indexed by `DateTime.weekday - 1`
-  /// (`DateTime.weekday`: Monday = 1 ... Sunday = 7).
-  static const List<String> _hebrewWeekdays = [
-    'שני',
-    'שלישי',
-    'רביעי',
-    'חמישי',
-    'שישי',
-    'שבת',
-    'ראשון',
-  ];
+  /// Accepted session `day` labels per `DateTime.weekday`, normalized to
+  /// lowercase. Agent-generated programs use English names ("Sunday",
+  /// "Monday", …); user/manual data may use Hebrew names (ראשון, שני, …).
+  /// Both are matched.
+  static const Map<int, List<String>> _dayNamesByWeekday = {
+    DateTime.monday: ['monday', 'שני'],
+    DateTime.tuesday: ['tuesday', 'שלישי'],
+    DateTime.wednesday: ['wednesday', 'רביעי'],
+    DateTime.thursday: ['thursday', 'חמישי'],
+    DateTime.friday: ['friday', 'שישי'],
+    DateTime.saturday: ['saturday', 'שבת'],
+    DateTime.sunday: ['sunday', 'ראשון'],
+  };
 
   /// Returns `true` if [date] has a scheduled non-rest session in
   /// [activeProgram], `false` if it has a rest session (or no session at
@@ -24,10 +26,10 @@ class TrainingDayService {
       return null;
     }
 
-    final dayName = _hebrewWeekdays[date.weekday - 1];
+    final names = _dayNamesByWeekday[date.weekday] ?? const <String>[];
     for (final week in activeProgram.weeks) {
       for (final session in week.sessions) {
-        if (session.day == dayName) {
+        if (names.contains(session.day.toLowerCase().trim())) {
           return session.type != 'rest';
         }
       }

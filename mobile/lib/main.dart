@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
@@ -29,50 +31,104 @@ import 'services/health_connect.dart';
 import 'services/image_service.dart';
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
+  // Show a readable error screen instead of a blank/closed app when a
+  // widget fails to build (visible even in release builds).
+  ErrorWidget.builder = (FlutterErrorDetails details) => Directionality(
+        textDirection: TextDirection.ltr,
+        child: Material(
+          color: const Color(0xFF7F0000),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: SingleChildScrollView(
+                child: Text(
+                  'Vitalis crashed on start:\n\n'
+                  '${details.exceptionAsString()}\n\n'
+                  '${details.stack}',
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
 
-  // TODO: Load from flutter_secure_storage
-  const apiUrl = String.fromEnvironment(
-    'API_URL',
-    defaultValue: 'https://func-vitalis-api.azurewebsites.net/api',
-  );
-  const apiKey = String.fromEnvironment(
-    'API_KEY',
-    defaultValue: 'PdVicIlE5QN27FwSk6rOjbvZMLzhpC1s',
-  );
+  runZonedGuarded(() {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  final apiClient = ApiClient(baseUrl: apiUrl, apiKey: apiKey);
-  final healthConnect = HealthConnectService();
-  final imageService = ImageService();
+    FlutterError.onError = (FlutterErrorDetails details) {
+      FlutterError.presentError(details);
+    };
 
-  runApp(
-    MultiProvider(
-      providers: [
-        Provider<ApiClient>.value(value: apiClient),
-        Provider<ImageService>.value(value: imageService),
-        Provider<HealthConnectService>.value(value: healthConnect),
-        ChangeNotifierProvider(create: (_) => MealProvider(apiClient)),
-        ChangeNotifierProvider(create: (_) => FavoritesProvider(apiClient)),
-        ChangeNotifierProvider(create: (_) => TemplatesProvider(apiClient)),
-        ChangeNotifierProvider(create: (_) => PlanProvider(apiClient)),
-        ChangeNotifierProvider(create: (_) => GoalsProvider(apiClient)),
-        ChangeNotifierProvider(create: (_) => SummaryProvider(apiClient)),
-        ChangeNotifierProvider(create: (_) => RecommendationProvider(apiClient)),
-        ChangeNotifierProvider(create: (_) => SleepProvider(apiClient)),
-        ChangeNotifierProvider(create: (_) => TrainingProvider(apiClient)),
-        ChangeNotifierProvider(create: (_) => GoalsProgramProvider(apiClient)),
-        ChangeNotifierProvider(create: (_) {
-          final provider = BiometricsProvider(
-            healthConnect,
-            apiClient: apiClient,
-          );
-          provider.init(); // Load Health Connect data on startup
-          return provider;
-        }),
-      ],
-      child: const VitalisApp(),
-    ),
-  );
+    // TODO: Load from flutter_secure_storage
+    const apiUrl = String.fromEnvironment(
+      'API_URL',
+      defaultValue: 'https://func-vitalis-api.azurewebsites.net/api',
+    );
+    const apiKey = String.fromEnvironment(
+      'API_KEY',
+      defaultValue: 'PdVicIlE5QN27FwSk6rOjbvZMLzhpC1s',
+    );
+
+    final apiClient = ApiClient(baseUrl: apiUrl, apiKey: apiKey);
+    final healthConnect = HealthConnectService();
+    final imageService = ImageService();
+
+    runApp(
+      MultiProvider(
+        providers: [
+          Provider<ApiClient>.value(value: apiClient),
+          Provider<ImageService>.value(value: imageService),
+          Provider<HealthConnectService>.value(value: healthConnect),
+          ChangeNotifierProvider(create: (_) => MealProvider(apiClient)),
+          ChangeNotifierProvider(create: (_) => FavoritesProvider(apiClient)),
+          ChangeNotifierProvider(create: (_) => TemplatesProvider(apiClient)),
+          ChangeNotifierProvider(create: (_) => PlanProvider(apiClient)),
+          ChangeNotifierProvider(create: (_) => GoalsProvider(apiClient)),
+          ChangeNotifierProvider(create: (_) => SummaryProvider(apiClient)),
+          ChangeNotifierProvider(create: (_) => RecommendationProvider(apiClient)),
+          ChangeNotifierProvider(create: (_) => SleepProvider(apiClient)),
+          ChangeNotifierProvider(create: (_) => TrainingProvider(apiClient)),
+          ChangeNotifierProvider(create: (_) => GoalsProgramProvider(apiClient)),
+          ChangeNotifierProvider(create: (_) {
+            final provider = BiometricsProvider(
+              healthConnect,
+              apiClient: apiClient,
+            );
+            provider.init(); // Load Health Connect data on startup
+            return provider;
+          }),
+        ],
+        child: const VitalisApp(),
+      ),
+    );
+  }, (Object error, StackTrace stack) {
+    // Last-resort handler for uncaught async errors during startup —
+    // show the error on screen instead of a silent crash.
+    debugPrint('Vitalis uncaught zone error: $error\n$stack');
+    runApp(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Directionality(
+          textDirection: TextDirection.ltr,
+          child: Material(
+            color: const Color(0xFF7F0000),
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: SingleChildScrollView(
+                  child: Text(
+                    'Vitalis crashed on start (zone):\n\n$error\n\n$stack',
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  });
 }
 
 final _router = GoRouter(
