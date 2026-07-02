@@ -432,6 +432,35 @@ void main() {
       expect(provider.statusForDay(future, goal), DayStatus.future);
     });
 
+    test('loadDayOverrides does not throw when the API call fails', () async {
+      final mockClient = MockClient((_) async => http.Response('{"error":"boom"}', 500));
+
+      provider = MealProvider(
+        ApiClient(baseUrl: 'http://test/api', apiKey: 'key', httpClient: mockClient),
+      );
+
+      // Must not throw — this is called unawaited from initState on app
+      // startup; an uncaught exception here crashes the app on cold start.
+      await provider.loadDayOverrides();
+    });
+
+    test('toggleDayOverride does not throw when the API call fails', () async {
+      final mockClient = MockClient((req) async {
+        if (req.method == 'GET') {
+          return http.Response(jsonEncode({'overrides': []}), 200);
+        }
+        return http.Response('{"error":"boom"}', 500);
+      });
+
+      provider = MealProvider(
+        ApiClient(baseUrl: 'http://test/api', apiKey: 'key', httpClient: mockClient),
+      );
+
+      await provider.loadDayOverrides();
+      // Must not throw — persistence failure should not crash the app.
+      await provider.toggleDayOverride(DateTime(2026, 6, 20));
+    });
+
     test('loadRange loads meals for all days in range in one call', () async {
       final start = DateTime(2026, 6, 1);
       final end = DateTime(2026, 6, 3);

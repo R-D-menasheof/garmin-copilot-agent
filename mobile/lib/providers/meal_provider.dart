@@ -229,11 +229,17 @@ class MealProvider extends ChangeNotifier {
   // ── Day Tracking Overrides & Weekly Balance ─────────────
 
   Future<void> loadDayOverrides() async {
-    final overrides = await _api.getDayOverrides();
-    _overridesByDay
-      ..clear()
-      ..addEntries(overrides.map((o) => MapEntry(_dayKey(o.date), o)));
-    notifyListeners();
+    try {
+      final overrides = await _api.getDayOverrides();
+      _overridesByDay
+        ..clear()
+        ..addEntries(overrides.map((o) => MapEntry(_dayKey(o.date), o)));
+    } catch (_) {
+      // Keep existing overrides on error — this runs unawaited from
+      // initState on app startup and must never crash the app.
+    } finally {
+      notifyListeners();
+    }
   }
 
   /// Whether [day] counts towards balance calculations: an explicit override
@@ -264,7 +270,12 @@ class MealProvider extends ChangeNotifier {
       updatedAt: DateTime.now(),
     );
     notifyListeners();
-    await _api.postDayOverride(day, newTracked, note: existingNote.isEmpty ? null : existingNote);
+    try {
+      await _api.postDayOverride(day, newTracked, note: existingNote.isEmpty ? null : existingNote);
+    } catch (_) {
+      // Local state already updated optimistically; persistence will be
+      // retried next time overrides are loaded/toggled. Must not crash.
+    }
   }
 
   int _caloriesTargetForDay(DateTime day, NutritionGoal goal) {
