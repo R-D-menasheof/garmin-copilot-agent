@@ -28,10 +28,18 @@ class _FakeGarmin:
         self.display_name: str | None = None
         self.full_name: str | None = None
         self.unit_system: str | None = None
-        self.garth = SimpleNamespace(
+        # garminconnect 0.3.3 exposes the underlying transport client as
+        # `self.client` (no longer `self.garth`). Token dump/load goes through it.
+        self.client = SimpleNamespace(
             dump=self._dump,
             connectapi=self._connectapi,
         )
+
+    def _populate_profile(self) -> None:
+        """Mimic the profile/settings fetch that real Garmin.login does."""
+        self.display_name = "TestUser"
+        self.full_name = "Test User"
+        self.unit_system = "METRIC"
 
     def _dump(self, tokenstore: str) -> None:
         self.dump_calls.append(tokenstore)
@@ -55,10 +63,12 @@ class _FakeGarmin:
         if not args:
             raise AssertionError("OAuth1 token is required for OAuth2 refresh")
 
+        self._populate_profile()
         return (None, None)
 
-    def resume_login(self, state: dict, code: str) -> tuple:
+    def resume_login(self, state, code: str) -> tuple:
         self.resume_login_calls.append((state, code))
+        self._populate_profile()
         return (None, None)
 
 
@@ -71,6 +81,7 @@ class _FakeGarminTokenSuccess(_FakeGarmin):
             args = (self._email, self._password)
         self.login_calls.append((args, tokenstore))
         # Token login always succeeds
+        self._populate_profile()
         return (None, None)
 
 
@@ -86,7 +97,8 @@ class _FakeGarminMFA(_FakeGarmin):
         if not args:
             raise AssertionError("OAuth1 token is required for OAuth2 refresh")
 
-        return ("needs_mfa", {"signin_params": {}, "client": object()})
+        # garminconnect 0.3.3: MFA returns ("needs_mfa", None) — state lives on self.
+        return ("needs_mfa", None)
 
 
 @pytest.fixture(autouse=True)
@@ -219,7 +231,11 @@ def test_token_login_redumps_tokens(monkeypatch: pytest.MonkeyPatch, tmp_path: P
 
 
 def test_mfa_resume_loads_profile(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    """After MFA resume, display_name should be populated via _load_profile_and_settings."""
+    """After MFA resume, display_name should be populated.
+
+    In garminconnect 0.3.3 the profile/settings fetch happens inside
+    Garmin.resume_login itself, so we just verify the resulting state.
+    """
     tokenstore = tmp_path / "garmin_tokens"
     monkeypatch.setattr(client_module, "Garmin", _FakeGarminMFA)
 
@@ -234,9 +250,8 @@ def test_mfa_resume_loads_profile(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     client2 = GarminClient(email="me@test.com", password="pw", tokenstore=str(tokenstore))
     client2.connect(mfa_code="123456", mfa_session_id=session_id)
 
-    # Profile should be loaded (connectapi called for profile/settings)
-    profile_calls = [c for c in _FakeGarminMFA.connectapi_calls if "profile" in c]
-    assert len(profile_calls) >= 1
+    # Profile must be populated after resume
+    assert client2.api.display_name is not None
 
 
 class _FakeGarminWithData(_FakeGarminTokenSuccess):

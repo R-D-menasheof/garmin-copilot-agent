@@ -16,6 +16,7 @@ Vitalis uses a **coordinator + specialist** multi-agent pattern:
 ├── nutrition-coach   — Calorie targets, macros, supplements, diet advice
 ├── fitness-coach     — Workout plans, training protocols, VO2max
 ├── health-consultant — Lab interpretation, sleep protocols, recovery
+├── longevity-coach   — Anti-aging stacks, evidence-tiered supplements, skincare
 └── vitalis-dev       — Mobile app & API development (Flutter, Azure Functions)
 ```
 
@@ -194,6 +195,7 @@ vitalis/
 │   │   ├── nutrition-coach.agent.md
 │   │   ├── fitness-coach.agent.md
 │   │   ├── health-consultant.agent.md
+│   │   ├── longevity-coach.agent.md
 │   │   └── vitalis-dev.agent.md # Mobile app & API development
 │   ├── prompts/                 # One-click workflows
 │   ├── skills/                  # Domain knowledge (*/SKILL.md)

@@ -31,7 +31,14 @@ _GARMIN_AUTO_FIELDS = {
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
-    """Load a YAML file, returning empty dict if missing/invalid."""
+    """Load a YAML file, returning empty dict if missing.
+
+    Raises:
+        yaml.YAMLError: If the file exists but cannot be parsed.  We
+            deliberately do NOT swallow parse errors — silently returning
+            ``{}`` would let downstream writers (e.g. ``update_from_garmin``)
+            overwrite the user's curated profile with a fresh blank one.
+    """
     try:
         import yaml
     except ImportError:
@@ -39,13 +46,9 @@ def _load_yaml(path: Path) -> dict[str, Any]:
         return {}
     if not path.exists():
         return {}
-    try:
-        text = path.read_text(encoding="utf-8")
-        data = yaml.safe_load(text)
-        return data if isinstance(data, dict) else {}
-    except Exception as exc:
-        logger.warning("Could not read profile %s: %s", path, exc)
-        return {}
+    text = path.read_text(encoding="utf-8")
+    data = yaml.safe_load(text)
+    return data if isinstance(data, dict) else {}
 
 
 def _save_yaml(path: Path, data: dict[str, Any]) -> None:

@@ -98,28 +98,35 @@ class GarminClient:
                     "Please try syncing again."
                 )
             self._api = session["garmin"]
-            self._api.resume_login(session["state"], mfa_code)
+            # garminconnect 0.3.3: client_state is unused (MFA state is held
+            # on the Garmin instance itself); only mfa_code matters.
+            self._api.resume_login(session.get("state") or {}, mfa_code)
             try:
-                self._api.garth.dump(str(tokenstore_path))
+                self._api.client.dump(str(tokenstore_path))
                 logger.info("MFA login completed; tokens saved to %s", tokenstore_path)
             except Exception as exc:  # pragma: no cover
                 logger.warning("Could not persist OAuth tokens after MFA: %s", exc)
-            self._load_profile_and_settings()
             return
 
         # ----- Phase 1: try existing OAuth tokens (only if files exist) -----
+        # garminconnect 0.3.3 saves a single `garmin_tokens.json`.
+        # Older garth-based versions saved `oauth1_token.json` + `oauth2_token.json`.
+        # Either layout is loadable via Garmin().login(<dir>).
+        new_token_file = tokenstore_path / "garmin_tokens.json"
         oauth1_file = tokenstore_path / "oauth1_token.json"
         oauth2_file = tokenstore_path / "oauth2_token.json"
-        if oauth1_file.exists() and oauth2_file.exists():
+        has_tokens = new_token_file.exists() or (
+            oauth1_file.exists() and oauth2_file.exists()
+        )
+        if has_tokens:
             try:
                 self._api = Garmin()
                 self._api.login(str(tokenstore_path))
                 logger.info("Logged in using stored OAuth tokens.")
                 try:
-                    self._api.garth.dump(str(tokenstore_path))
+                    self._api.client.dump(str(tokenstore_path))
                 except Exception:  # pragma: no cover
                     pass  # best-effort re-persist after potential token refresh
-                self._load_profile_and_settings()
                 return
             except Exception as exc:
                 logger.warning("Token-based login failed: %s — wiping tokens.", exc)
@@ -150,12 +157,12 @@ class GarminClient:
                 os.environ["GARMINTOKENS"] = old_env
 
         # ----- Handle MFA -----
+        # garminconnect 0.3.3: login(return_on_mfa=True) returns
+        # ("needs_mfa", None) when MFA is required.  The MFA state
+        # (session cookies, login params, mfa method) is stored on the
+        # Garmin instance itself, so we just need to keep the instance
+        # alive in memory until the user enters the code.
         if result1 == "needs_mfa":
-            if not isinstance(result2, dict):
-                raise GarminMFARequiredError(
-                    "Garmin requires MFA but returned unexpected data.",
-                    session_id="",
-                )
             session_id = uuid.uuid4().hex
             _pending_mfa_sessions[session_id] = {
                 "garmin": self._api,
@@ -168,9 +175,8 @@ class GarminClient:
             )
 
         # ----- Success without MFA -----
-        self._load_profile_and_settings()
         try:
-            self._api.garth.dump(str(tokenstore_path))
+            self._api.client.dump(str(tokenstore_path))
             logger.info("OAuth tokens saved to %s", tokenstore_path)
         except Exception as exc:  # pragma: no cover
             logger.warning("Could not persist OAuth tokens: %s", exc)

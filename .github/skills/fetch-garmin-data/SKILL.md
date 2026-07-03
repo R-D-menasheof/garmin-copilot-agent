@@ -23,23 +23,32 @@ python scripts/sync.py --from 2026-01-01 --to 2026-01-31  # Date range
 On first run, Garmin may require MFA — the script will prompt you
 to enter the verification code sent to your email.
 
-### 429 Workaround — Browser Auth
+### Authentication Flow (garminconnect 0.3.3 / May 2026)
 
-Since March 2026, Garmin is blocking programmatic SSO login via Cloudflare (returns 429 for all garth/garminconnect users globally). Browser login still works. Use the Playwright-based workaround:
+`garminconnect` 0.3.3 ships its own login client (no longer uses `garth.Client` for SSO) with a 5-strategy cascading chain that automatically falls through on 429:
 
-```bash
-# One-time setup
-pip install playwright requests-oauthlib
-playwright install chromium
+1. `mobile+cffi` — iOS app flow with curl_cffi TLS fingerprint rotation
+2. `mobile+requests` — iOS app flow with plain requests
+3. `widget+cffi` — SSO embed widget (HTML form flow)
+4. `portal+cffi` — Portal web login (Cloudflare-fingerprinted)
+5. `portal+requests` — Portal web login (plain requests)
 
-# Run browser auth — opens Chromium, you login manually
-python scripts/browser_auth.py
+**Expect WARNINGS like `mobile+cffi returned 429: Mobile login returned 429`** — these are NOT fatal. The chain falls through and one of the later strategies will normally succeed (then ask for MFA). Only fail if you see `All login strategies rate limited (429)` after all 5 attempts.
 
-# Then sync normally — uses saved tokens, no SSO login needed
-python scripts/sync.py --days 14
-```
+### Token Cache
 
-The browser auth script saves OAuth tokens to `data/.garmin_tokens/`. `sync.py` picks them up automatically (Phase 1 token-based login). Tokens typically last until they expire or Garmin revokes them.
+After a successful MFA login, tokens are saved to `data/.garmin_tokens/garmin_tokens.json` (single file, garminconnect 0.3.3 format). Subsequent `sync.py` runs use the cached tokens — no MFA, no 429 cascade. Tokens auto-refresh via DI refresh token; no manual rotation needed.
+
+If `sync.py` keeps re-prompting for MFA on every run, check that:
+- `data/.garmin_tokens/garmin_tokens.json` exists and has size > 0 after the previous run
+- The token store directory isn't being wiped between runs (e.g. by OneDrive sync conflicts)
+- `garminconnect >= 0.3.3` and `garth >= 0.8.0` are installed (older versions used a different on-disk format and our client looks for both)
+
+### What to do if MFA fails or the chain rate-limits
+
+- **Wait 2-3 hours** before retrying. Garmin's 429 bucket is cumulative per IP and per account — every failed attempt fills it further.
+- **Never retry in a loop** — each attempt sends another MFA email and burns a token-exchange slot.
+- If sync hangs at the MFA prompt, finish the prompt or Ctrl-C cleanly; killing the terminal mid-prompt sometimes leaves the in-memory MFA session orphaned (you'll need to restart and trigger a new MFA email).
 
 ## Available Data Types (30+)
 
@@ -105,7 +114,7 @@ Each data type gets its own JSON file containing raw API responses. Empty respon
 - Each data type fetch is wrapped in `try/except` — one failure doesn't block others
 - Not all Garmin devices support all data types (e.g., HRV requires newer watches)
 - Rate limiting: be conservative, don't sync more than 90 days at once
-- Auth tokens are cached in `data/.garmin_tokens/` — usually no password needed after first login
+- Auth tokens are cached in `data/.garmin_tokens/garmin_tokens.json` — usually no MFA needed after first login
 
 ## After Syncing
 

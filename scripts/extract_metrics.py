@@ -305,6 +305,67 @@ def extract_weight(data: dict | list) -> dict[str, Any]:
     }
 
 
+def extract_body_composition(data: list | dict) -> dict[str, Any]:
+    """Extract body composition (body fat, muscle, visceral fat, etc.) from body_composition.json.
+
+    Garmin syncs these from a connected INDEX_SCALE. Returns per-day entries plus
+    latest values and a visceral-fat trend.
+    """
+    if not data:
+        return {}
+
+    days = data if isinstance(data, list) else [data]
+    entries: list[dict[str, Any]] = []
+    for d in days:
+        if not isinstance(d, dict):
+            continue
+        samples = d.get("dateWeightList") or []
+        sample = samples[0] if samples else (d.get("totalAverage") or {})
+        if not isinstance(sample, dict):
+            continue
+        w = sample.get("weight")
+        vf = sample.get("visceralFat")
+        bf = sample.get("bodyFat")
+        mm = sample.get("muscleMass")
+        if w is None and vf is None and bf is None:
+            continue
+        entries.append(
+            {
+                "date": sample.get("calendarDate") or d.get("startDate", "?"),
+                "kg": round(w / 1000, 1) if isinstance(w, (int, float)) and w > 500 else w,
+                "body_fat_pct": bf,
+                "body_water_pct": sample.get("bodyWater"),
+                "muscle_mass_kg": round(mm / 1000, 1) if isinstance(mm, (int, float)) and mm > 500 else mm,
+                "bone_mass_kg": round(sample.get("boneMass") / 1000, 2)
+                if isinstance(sample.get("boneMass"), (int, float)) and sample.get("boneMass") > 100
+                else sample.get("boneMass"),
+                "visceral_fat": vf,
+                "bmi": round(sample.get("bmi"), 1) if isinstance(sample.get("bmi"), (int, float)) else sample.get("bmi"),
+                "physique_rating": sample.get("physiqueRating"),
+            }
+        )
+
+    if not entries:
+        return {}
+
+    vf_vals = [(e["date"], e["visceral_fat"]) for e in entries if e.get("visceral_fat") is not None]
+    bf_vals = [e["body_fat_pct"] for e in entries if e.get("body_fat_pct") is not None]
+    mm_vals = [e["muscle_mass_kg"] for e in entries if e.get("muscle_mass_kg") is not None]
+    latest = entries[-1]
+    return {
+        "latest": latest,
+        "count": len(entries),
+        "entries": entries,
+        "visceral_fat_latest": latest.get("visceral_fat"),
+        "visceral_fat_trend": vf_vals,
+        "body_fat_pct_latest": latest.get("body_fat_pct"),
+        "body_fat_pct_avg": round(_avg(bf_vals), 1) if bf_vals else None,
+        "muscle_mass_kg_latest": latest.get("muscle_mass_kg"),
+        "muscle_mass_kg_avg": round(_avg(mm_vals), 1) if mm_vals else None,
+        "source": "garmin_index_scale",
+    }
+
+
 def extract_intensity_minutes(data: list[dict]) -> dict[str, Any]:
     """Extract intensity minutes from intensity_minutes.json."""
     if not data:
@@ -436,6 +497,13 @@ def extract_all(folder: Path) -> dict[str, Any]:
     wi = _load_json(folder / "weigh_ins.json")
     if wi:
         result["weight"] = extract_weight(wi)
+
+    # Body composition (body fat, muscle, visceral fat from synced INDEX_SCALE)
+    bc = _load_json(folder / "body_composition.json")
+    if bc:
+        body_comp = extract_body_composition(bc)
+        if body_comp:
+            result["body_composition"] = body_comp
 
     # Intensity minutes
     im = _load_json(folder / "intensity_minutes.json")
@@ -585,6 +653,25 @@ def format_report(metrics: dict[str, Any]) -> str:
         if wt.get("count", 0) > 1:
             for e in wt.get("entries", []):
                 lines.append(f"    {e['date']}: {e['kg']} kg")
+
+    # Body composition
+    bc = metrics.get("body_composition", {})
+    if bc:
+        heading("BODY COMPOSITION (Garmin INDEX_SCALE)")
+        latest = bc.get("latest", {})
+        kv("Latest visceral fat", bc.get("visceral_fat_latest"))
+        kv("Latest body fat %", bc.get("body_fat_pct_latest"))
+        kv("Latest muscle mass kg", bc.get("muscle_mass_kg_latest"))
+        kv("Body fat % avg", bc.get("body_fat_pct_avg"))
+        kv("Muscle mass kg avg", bc.get("muscle_mass_kg_avg"))
+        vf_trend = bc.get("visceral_fat_trend", [])
+        if vf_trend:
+            kv("Visceral fat trend", ", ".join(f"{d}={v}" for d, v in vf_trend))
+        for e in bc.get("entries", []):
+            lines.append(
+                f"    {e['date']}: {e['kg']}kg fat={e['body_fat_pct']}% "
+                f"muscle={e['muscle_mass_kg']}kg visceral={e['visceral_fat']} bmi={e['bmi']}"
+            )
 
     # Intensity minutes
     im = metrics.get("intensity_minutes", {})

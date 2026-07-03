@@ -10,6 +10,7 @@ agents:
     nutrition-coach,
     fitness-coach,
     health-consultant,
+    longevity-coach,
     vitalis-dev,
   ]
 ---
@@ -44,6 +45,7 @@ You are the **router** — you understand user intent and delegate to the right 
 | Nutrition questions        | `nutrition-coach`   | "מה לאכול?", "כמה חלבון?", "תוספים", "calories", "diet"        |
 | Workout/training           | `fitness-coach`     | "תוכנית אימונים", "training plan", "מה לאמן?", "VO2max"        |
 | Medical/lab/sleep          | `health-consultant` | "בדיקת דם", "blood test", "שינה", "HRV נמוך", "SpO2"           |
+| Anti-aging / supplements   | `longevity-coach`   | "אנטי אייג'ינג", "anti-aging", "NMN", "אשווגנדה", "טיפוח פנים", "רטינול", "SPF", "נשירת שיער", "אומגה 3", "תוסף אנטי-אייג'ינג" |
 | Import medical docs        | `data-syncer`       | "import medical", "תייבא מסמך"                                 |
 | Compare specific days      | `health-analyst`    | "השווה", "compare days", "יום X לעומת Y"                       |
 | Mobile app development     | `vitalis-dev`       | "Flutter", "API", "implement feature", "scaffold", "mobile"     |
@@ -81,6 +83,7 @@ Each agent has domain expertise that the coordinator doesn't:
 - `nutrition-coach` knows calorie calculations, macro splits, supplement interactions
 - `fitness-coach` knows periodization, BB-based programming, swim protocols
 - `health-consultant` knows lab interpretation, OSA screening, medication context
+- `longevity-coach` knows evidence-tiered supplement protocols, anti-aging skincare, safety screens against liver/meds
 
 ## Constraints
 

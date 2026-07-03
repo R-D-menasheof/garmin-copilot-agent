@@ -87,3 +87,38 @@ class TestProfile:
         assert updated["name"] == "Ronen"
         assert updated["goals"] == ["Run marathon"]
         assert updated["resting_heart_rate"] == 55
+
+    def test_load_invalid_yaml_raises_not_silent_empty(self, tmp_path):
+        """A malformed YAML file MUST NOT be silently treated as empty.
+
+        Regression test: a YAML parse error caused load_profile to return
+        {}, which let update_from_garmin overwrite the file with a fresh
+        blank profile, destroying the user's data. load_profile must
+        raise on parse failure when the file exists and is non-empty.
+        """
+        path = tmp_path / "profile.yaml"
+        # Single-quoted YAML with an unescaped apostrophe — real-world bug
+        path.write_text(
+            "name: Ronen\nnotes:\n  - 'oops it's broken'\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(Exception):
+            load_profile(path)
+
+    def test_update_from_garmin_does_not_destroy_unparseable_profile(
+        self, tmp_path
+    ):
+        """update_from_garmin must NOT overwrite a profile it cannot parse.
+
+        Regression test: previously, a parse error caused update_from_garmin
+        to load {} and write a near-empty file, destroying ~140 lines of
+        manually curated user data.
+        """
+        path = tmp_path / "profile.yaml"
+        original = "name: Ronen\nnotes:\n  - 'oops it's broken'\n"
+        path.write_text(original, encoding="utf-8")
+        raw = {"daily_stats": [{"restingHeartRate": 55}]}
+        with pytest.raises(Exception):
+            update_from_garmin(raw, path)
+        # File on disk must be unchanged
+        assert path.read_text(encoding="utf-8") == original

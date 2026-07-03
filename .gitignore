@@ -67,6 +67,14 @@ data/medical/context.md
 !data/medical/prescriptions/.gitkeep
 !data/medical/vaccinations/.gitkeep
 
+# Personal health data & temp diagnostic dumps (never upload — kept local only)
+/_*.json
+data/longevity-plan.md
+data/profile.yaml.broken-*
+
+# One-off / personal helper scripts (underscore-prefixed convention)
+scripts/_*.py
+
 # Local artifacts
 %TEMP%/
 tmp-api-deploy/
