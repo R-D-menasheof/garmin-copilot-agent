@@ -48,6 +48,20 @@ void main() {
       expect(seen[1], 'k'); // x-api-key present
     });
 
+    test('empty apiKey sends no x-api-key header (SSO-only build)', () async {
+      final headers = <String, String>{};
+      final inner = MockClient((req) async {
+        headers.addAll(req.headers);
+        return http.Response('{}', 200);
+      });
+      final client = AuthHttpClient(inner, apiKey: '');
+
+      await client.get(Uri.parse('http://t/x'));
+
+      expect(headers.containsKey('x-api-key'), isFalse);
+      expect(headers.containsKey('authorization'), isFalse);
+    });
+
     test('on 401 refreshes the token and retries once with the new token', () async {
       final tokens = <String?>[];
       var calls = 0;

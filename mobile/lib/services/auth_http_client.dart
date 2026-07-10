@@ -63,7 +63,7 @@ class AuthHttpClient extends http.BaseClient {
     final token = _bearerToken;
     if (token != null) {
       req.headers['Authorization'] = 'Bearer $token';
-    } else {
+    } else if (apiKey.isNotEmpty) {
       req.headers['x-api-key'] = apiKey;
     }
     return req;

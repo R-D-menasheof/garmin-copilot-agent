@@ -80,10 +80,10 @@ void main() async {
     'API_URL',
     defaultValue: 'https://func-vitalis-api.azurewebsites.net/api',
   );
-  const apiKey = String.fromEnvironment(
-    'API_KEY',
-    defaultValue: 'PdVicIlE5QN27FwSk6rOjbvZMLzhpC1s',
-  );
+  // Transitional x-api-key fallback. Left empty in source so no key ships in
+  // the public repo; real requests authenticate via SSO (bearer token). A key
+  // can be injected at build time with --dart-define=API_KEY=... if needed.
+  const apiKey = String.fromEnvironment('API_KEY', defaultValue: '');
 
   final apiClient = ApiClient(baseUrl: apiUrl, apiKey: apiKey);
   final healthConnect = HealthConnectService();

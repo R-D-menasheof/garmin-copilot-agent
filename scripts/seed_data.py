@@ -13,7 +13,7 @@ sys.path.insert(0, str(_project_root / "src"))
 import httpx
 
 API_URL = os.environ.get("VITALIS_API_URL", "https://func-vitalis-api.azurewebsites.net/api")
-API_KEY = os.environ.get("VITALIS_API_KEY", "PdVicIlE5QN27FwSk6rOjbvZMLzhpC1s")
+API_KEY = os.environ.get("VITALIS_API_KEY", "")
 HEADERS = {"x-api-key": API_KEY, "Content-Type": "application/json"}
 
 
