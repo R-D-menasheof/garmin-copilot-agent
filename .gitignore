@@ -25,6 +25,11 @@ htmlcov/
 # Azure Functions local secrets
 api/local.settings.json
 
+# Secrets — FCM service account, Firebase config (never commit)
+data/.secrets/
+**/google-services.json
+**/GoogleService-Info.plist
+
 # IDE
 .vscode/settings.json
 .idea/
@@ -51,6 +56,16 @@ data/summaries/*.md
 data/csv from garmin/
 data/goal_program.json
 data/training_plan.json
+
+# Cloud backups (full personal health data snapshots — never commit)
+data/cloud-backup-*/
+
+# Multi-user staging — each cloud user's personal health data, medical docs,
+# generated reports, and Garmin OAuth tokens live under data/users/<oid>/.
+# NEVER commit any user's data; keep only the structural docs.
+data/users/*
+!data/users/.gitkeep
+!data/users/README.md
 
 # Medical records — all personal documents ignored
 data/medical/blood_tests/*
