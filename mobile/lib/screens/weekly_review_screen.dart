@@ -8,6 +8,7 @@ import '../models/timeline_event.dart';
 import '../providers/recommendation_provider.dart';
 import '../providers/summary_provider.dart';
 import '../services/api_client.dart';
+import '../services/trend_extractors.dart';
 import '../widgets/trend_chart.dart';
 
 class WeeklyReviewScreen extends StatefulWidget {
@@ -251,43 +252,174 @@ class _ReportTabState extends State<_ReportTab> {
   }
 }
 
-class _TrendsTab extends StatelessWidget {
+class _TrendMetric {
+  final String key;
+  final String title;
+  final String unit;
+  final Color color;
+  const _TrendMetric(this.key, this.title, this.unit, this.color);
+}
+
+class _TrendGroup {
+  final String title;
+  final List<_TrendMetric> metrics;
+  const _TrendGroup(this.title, this.metrics);
+}
+
+/// All worthwhile trends grouped by domain. Body Battery / Stress /
+/// Training Readiness are intentionally excluded.
+const _trendGroups = <_TrendGroup>[
+  _TrendGroup('לב והתאוששות', [
+    _TrendMetric('resting_hr', 'RHR', 'bpm', Colors.red),
+    _TrendMetric('hrv_ms', 'HRV', 'ms', Colors.teal),
+    _TrendMetric('avg_hr', 'דופק ממוצע', 'bpm', Colors.redAccent),
+    _TrendMetric('max_hr', 'דופק מקסימלי', 'bpm', Colors.deepOrange),
+  ]),
+  _TrendGroup('שינה', [
+    _TrendMetric('sleep_hours', 'שינה', 'שעות', Colors.indigo),
+    _TrendMetric('sleep_score', 'ציון שינה', '/100', Colors.amber),
+    _TrendMetric('deep_sleep_hours', 'שינה עמוקה (Deep)', 'שעות', Color(0xFF283593)),
+    _TrendMetric('rem_sleep_hours', 'REM', 'שעות', Colors.deepPurple),
+    _TrendMetric('light_sleep_hours', 'שינה קלה (Light)', 'שעות', Color(0xFF64B5F6)),
+  ]),
+  _TrendGroup('הרכב גוף', [
+    _TrendMetric('weight_kg', 'משקל', 'ק"ג', Colors.brown),
+    _TrendMetric('body_fat_pct', 'אחוז שומן', '%', Colors.orange),
+    _TrendMetric('bmi', 'BMI', 'kg/m²', Colors.blueGrey),
+    _TrendMetric('basal_metabolic_rate', 'BMR', 'kcal', Colors.deepPurple),
+  ]),
+  _TrendGroup('כושר', [
+    _TrendMetric('vo2max', 'VO2max', 'ml/kg/min', Colors.purple),
+  ]),
+  _TrendGroup('פעילות', [
+    _TrendMetric('steps', 'צעדים', '', Colors.green),
+    _TrendMetric('active_calories', 'קלוריות פעילות', 'kcal', Colors.orange),
+    _TrendMetric('intensity_minutes', 'דקות עצימות', 'דק׳', Colors.deepOrange),
+    _TrendMetric('exercise_minutes', 'דקות פעילות', 'דק׳', Colors.lightGreen),
+    _TrendMetric('distance_km', 'מרחק', 'ק"מ', Colors.blueGrey),
+    _TrendMetric('floors_climbed', 'קומות', '', Colors.brown),
+  ]),
+  _TrendGroup('מדדים חיוניים', [
+    _TrendMetric('spo2_pct', 'SpO2', '%', Colors.teal),
+    _TrendMetric('respiratory_rate', 'נשימות לדקה', '', Colors.cyan),
+    _TrendMetric('body_temp_c', 'טמפרטורת גוף', '°C', Colors.orange),
+    _TrendMetric('bp_systolic', 'לחץ דם סיסטולי', 'mmHg', Color(0xFFC62828)),
+  ]),
+  _TrendGroup('תזונה', [
+    _TrendMetric('calories', 'קלוריות', 'kcal', Colors.red),
+    _TrendMetric('protein_g', 'חלבון', 'גרם', Colors.blue),
+  ]),
+];
+
+class _TrendsTab extends StatefulWidget {
   const _TrendsTab();
 
-  static const _chartConfig = [
-    ('avg_sleep_hours', 'שינה', 'שעות', Colors.indigo),
-    ('avg_resting_hr', 'RHR', 'bpm', Colors.red),
-    ('avg_hrv_nightly', 'HRV', 'ms', Colors.teal),
-    ('weight_kg', 'משקל', 'ק"ג', Colors.brown),
-    ('avg_daily_steps', 'צעדים', 'ממוצע', Colors.green),
-    ('avg_body_battery_peak', 'Body Battery', 'שיא', Colors.orange),
-  ];
+  @override
+  State<_TrendsTab> createState() => _TrendsTabState();
+}
+
+class _TrendsTabState extends State<_TrendsTab> {
+  int _days = 90;
+  bool _loading = true;
+  Map<String, List<(DateTime, double)>> _series = {};
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(_load);
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final client = Provider.of<ApiClient>(context, listen: false);
+      final now = DateTime.now();
+      final from = now.subtract(Duration(days: _days));
+      final bio = await client.getBiometrics(from, now);
+      final mealsByStr = await client.getNutrition(from, now);
+      final mealsByDate =
+          mealsByStr.map((k, v) => MapEntry(DateTime.parse(k), v));
+      final series = {
+        ...biometricSeries(bio),
+        ...nutritionDailySeries(mealsByDate),
+      };
+      if (mounted) {
+        setState(() {
+          _series = series;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _series = {};
+          _loading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final summaryProvider = context.watch<SummaryProvider>();
-    final trends = summaryProvider.extractTrendData();
+    final hasAny = _series.values.any((list) => list.length >= 2);
 
-    final hasData = trends.values.any((list) => list.isNotEmpty);
-    if (!hasData) {
-      return const Center(child: Text('בקרוב'));
-    }
-
-    return ListView(
-      padding: const EdgeInsets.all(16),
+    return Column(
       children: [
-        for (final (metric, title, unit, color) in _chartConfig)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: TrendChart(
-              title: title,
-              unit: unit,
-              color: color,
-              data: trends[metric] ?? [],
-            ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: SegmentedButton<int>(
+            segments: const [
+              ButtonSegment(value: 30, label: Text('30 יום')),
+              ButtonSegment(value: 90, label: Text('90 יום')),
+            ],
+            selected: {_days},
+            onSelectionChanged: (selection) {
+              setState(() => _days = selection.first);
+              _load();
+            },
           ),
+        ),
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : !hasAny
+                  ? const Center(
+                      child: Text('אין עדיין מספיק נתונים להצגת מגמות'))
+                  : ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        for (final group in _trendGroups) ..._buildGroup(group),
+                      ],
+                    ),
+        ),
       ],
     );
+  }
+
+  List<Widget> _buildGroup(_TrendGroup group) {
+    final visible = group.metrics
+        .where((m) => (_series[m.key] ?? const []).length >= 2)
+        .toList();
+    if (visible.isEmpty) return const [];
+    return [
+      Padding(
+        padding: const EdgeInsets.only(top: 8, bottom: 4),
+        child: Text(
+          group.title,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+      ),
+      for (final metric in visible)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: TrendChart(
+            title: metric.title,
+            unit: metric.unit,
+            color: metric.color,
+            data: _series[metric.key]!,
+          ),
+        ),
+    ];
   }
 }
 

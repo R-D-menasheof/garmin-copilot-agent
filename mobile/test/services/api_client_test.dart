@@ -111,6 +111,67 @@ void main() {
       );
     });
 
+    test('getBiometrics parses date-keyed records', () async {
+      final mockClient = MockClient((req) async {
+        expect(req.url.path, contains('/v1/biometrics'));
+        expect(req.url.queryParameters['from'], '2026-04-01');
+        expect(req.url.queryParameters['to'], '2026-04-03');
+        return http.Response(
+          jsonEncode({
+            'biometrics': {
+              '2026-04-01': {
+                'date': '2026-04-01',
+                'resting_hr': 64,
+                'hrv_ms': 28,
+                'weight_kg': 112.0,
+                'vo2max': 42.5,
+              },
+              '2026-04-03': {
+                'date': '2026-04-03',
+                'resting_hr': 62,
+                'sleep_seconds': 21600,
+              },
+            }
+          }),
+          200,
+        );
+      });
+
+      client = ApiClient(
+        baseUrl: 'http://test/api',
+        apiKey: 'test-key',
+        httpClient: mockClient,
+      );
+
+      final result = await client.getBiometrics(
+        DateTime(2026, 4, 1),
+        DateTime(2026, 4, 3),
+      );
+
+      expect(result, hasLength(2));
+      expect(result[DateTime(2026, 4, 1)]!.restingHr, 64);
+      expect(result[DateTime(2026, 4, 1)]!.vo2max, 42.5);
+      expect(result[DateTime(2026, 4, 3)]!.sleepSeconds, 21600);
+    });
+
+    test('getBiometrics returns empty map when no data', () async {
+      final mockClient = MockClient((req) async {
+        return http.Response(jsonEncode({'biometrics': {}}), 200);
+      });
+
+      client = ApiClient(
+        baseUrl: 'http://test/api',
+        apiKey: 'test-key',
+        httpClient: mockClient,
+      );
+
+      final result = await client.getBiometrics(
+        DateTime(2026, 4, 1),
+        DateTime(2026, 4, 3),
+      );
+      expect(result, isEmpty);
+    });
+
     test('getRecommendationStatuses returns list', () async {
       final mockClient = MockClient((req) async {
         return http.Response(
@@ -200,4 +261,72 @@ void main() {
       await client.postDayOverride(DateTime(2026, 7, 1), false, note: 'נסעתי');
     });
   });
-}
+  group('ApiClient auth', () {
+    http.Response meOk(_) => http.Response(
+          jsonEncode({
+            'user_id': 'u',
+            'display_name': '',
+            'email': '',
+            'onboarded': false,
+          }),
+          200,
+        );
+
+    test('sends x-api-key when no bearer token set', () async {
+      final mockClient = MockClient((req) async {
+        expect(req.headers['x-api-key'], 'key');
+        expect(req.headers.containsKey('Authorization'), isFalse);
+        return meOk(req);
+      });
+      final client =
+          ApiClient(baseUrl: 'http://test/api', apiKey: 'key', httpClient: mockClient);
+      await client.getMe();
+    });
+
+    test('updateToken switches to Authorization Bearer header', () async {
+      final mockClient = MockClient((req) async {
+        expect(req.headers['Authorization'], 'Bearer jwt-123');
+        expect(req.headers.containsKey('x-api-key'), isFalse);
+        return meOk(req);
+      });
+      final client =
+          ApiClient(baseUrl: 'http://test/api', apiKey: 'key', httpClient: mockClient);
+      client.updateToken('jwt-123');
+      await client.getMe();
+    });
+
+    test('clearToken reverts to x-api-key', () async {
+      final mockClient = MockClient((req) async {
+        expect(req.headers['x-api-key'], 'key');
+        expect(req.headers.containsKey('Authorization'), isFalse);
+        return meOk(req);
+      });
+      final client =
+          ApiClient(baseUrl: 'http://test/api', apiKey: 'key', httpClient: mockClient);
+      client.updateToken('jwt-123');
+      client.clearToken();
+      await client.getMe();
+    });
+
+    test('getMe parses identity and onboarding', () async {
+      final mockClient = MockClient((req) async {
+        expect(req.url.path, contains('/v1/me'));
+        return http.Response(
+          jsonEncode({
+            'user_id': 'oid-1',
+            'display_name': 'Roei',
+            'email': 'r@x.com',
+            'onboarded': true,
+          }),
+          200,
+        );
+      });
+      final client =
+          ApiClient(baseUrl: 'http://test/api', apiKey: 'key', httpClient: mockClient);
+      final me = await client.getMe();
+      expect(me.userId, 'oid-1');
+      expect(me.displayName, 'Roei');
+      expect(me.email, 'r@x.com');
+      expect(me.onboarded, isTrue);
+    });
+  });}

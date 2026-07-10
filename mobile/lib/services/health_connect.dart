@@ -130,6 +130,7 @@ class HealthConnectService {
   static const List<HealthDataType> _types = <HealthDataType>[
     HealthDataType.RESTING_HEART_RATE,
     HealthDataType.HEART_RATE,
+    HealthDataType.HEART_RATE_VARIABILITY_RMSSD,
     HealthDataType.BLOOD_OXYGEN,
     HealthDataType.BODY_TEMPERATURE,
     HealthDataType.RESPIRATORY_RATE,
@@ -285,7 +286,8 @@ class HealthConnectService {
           : _minimumValue(heartRates)?.round(),
       avgHr: _averageValue(heartRates)?.round(),
       maxHr: _maximumValue(heartRates)?.round(),
-      hrvMs: null,
+      hrvMs: _latestValue(points, HealthDataType.HEART_RATE_VARIABILITY_RMSSD)
+          ?.round(),
       spo2Pct: _latestValue(points, HealthDataType.BLOOD_OXYGEN),
       bodyTempC: _latestValue(points, HealthDataType.BODY_TEMPERATURE),
       respiratoryRate: _latestValue(points, HealthDataType.RESPIRATORY_RATE),

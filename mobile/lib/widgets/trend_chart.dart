@@ -77,7 +77,9 @@ class _TrendChartState extends State<TrendChart> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '${widget.title} (${widget.unit})',
+              widget.unit.isEmpty
+                  ? widget.title
+                  : '${widget.title} (${widget.unit})',
               style: Theme.of(context).textTheme.titleSmall,
             ),
             const SizedBox(height: 12),

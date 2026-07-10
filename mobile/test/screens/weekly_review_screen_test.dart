@@ -48,6 +48,20 @@ Widget _buildScreen(SummaryProvider provider) {
           headers: {'content-type': 'application/json; charset=utf-8'},
         );
       }
+      if (uri.path.contains('/v1/biometrics')) {
+        return http.Response(
+          jsonEncode({'biometrics': {}}),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }
+      if (uri.path.contains('/v1/nutrition')) {
+        return http.Response(
+          jsonEncode({'meals': {}}),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }
       return http.Response('{}', 404);
     }),
   );
@@ -85,6 +99,61 @@ Widget _buildScreenWithLabTrends(
       if (uri.path.contains('medical/lab-trends')) {
         return http.Response(
           jsonEncode({'trends': labTrends}),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }
+      return http.Response('{}', 404);
+    }),
+  );
+
+  final recMock = MockClient((req) async {
+    if (req.method == 'GET') {
+      return http.Response(jsonEncode({'statuses': []}), 200,
+          headers: {'content-type': 'application/json; charset=utf-8'});
+    }
+    return http.Response(jsonEncode({'status': 'ok'}), 201);
+  });
+  final recProvider = RecommendationProvider(
+    ApiClient(baseUrl: 'http://test/api', apiKey: 'key', httpClient: recMock),
+  );
+
+  return MultiProvider(
+    providers: [
+      Provider<ApiClient>.value(value: apiClient),
+      ChangeNotifierProvider.value(value: provider),
+      ChangeNotifierProvider.value(value: recProvider),
+    ],
+    child: const MaterialApp(home: WeeklyReviewScreen()),
+  );
+}
+
+Widget _buildScreenWithBiometrics(
+  SummaryProvider provider, {
+  required Map<String, dynamic> bioResponse,
+}) {
+  final apiClient = ApiClient(
+    baseUrl: 'http://test/api',
+    apiKey: 'key',
+    httpClient: MockClient((req) async {
+      final uri = req.url;
+      if (uri.path.contains('/v1/biometrics')) {
+        return http.Response(
+          jsonEncode(bioResponse),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }
+      if (uri.path.contains('/v1/nutrition')) {
+        return http.Response(
+          jsonEncode({'meals': {}}),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }
+      if (uri.path.contains('medical/lab-trends')) {
+        return http.Response(
+          jsonEncode({'trends': []}),
           200,
           headers: {'content-type': 'application/json; charset=utf-8'},
         );
@@ -201,7 +270,33 @@ void main() {
       await tester.tap(find.text('מגמות'));
       await tester.pumpAndSettle();
 
-      expect(find.text('בקרוב'), findsOneWidget);
+      expect(find.text('אין עדיין מספיק נתונים להצגת מגמות'), findsOneWidget);
+    });
+
+    testWidgets('trends tab renders biometric charts when data present', (tester) async {
+      final provider = _providerWith();
+      await provider.loadLatestSummary();
+
+      final bioResponse = {
+        'biometrics': {
+          '2026-04-01': {'date': '2026-04-01', 'resting_hr': 64, 'vo2max': 42.0},
+          '2026-04-02': {'date': '2026-04-02', 'resting_hr': 63, 'vo2max': 42.2},
+          '2026-04-03': {'date': '2026-04-03', 'resting_hr': 62, 'vo2max': 42.5},
+        }
+      };
+
+      await tester.pumpWidget(
+        _buildScreenWithBiometrics(provider, bioResponse: bioResponse),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('מגמות'));
+      await tester.pumpAndSettle();
+
+      // First group header + its RHR chart (title + unit) render.
+      expect(find.text('לב והתאוששות'), findsOneWidget);
+      expect(find.text('RHR (bpm)'), findsOneWidget);
+      expect(find.text('אין עדיין מספיק נתונים להצגת מגמות'), findsNothing);
     });
 
     testWidgets('lab tab hides metrics with fewer than two points', (tester) async {

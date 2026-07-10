@@ -10,13 +10,11 @@ import 'package:vitalis/services/health_connect.dart';
 
 class _FakeHealthClient implements HealthClient {
   _FakeHealthClient({
-    this.sdkStatus = HealthConnectSdkStatus.sdkAvailable,
     this.hasGrantedPermissions = false,
     this.requestAuthorizationResult = false,
     this.points = const <HealthDataPoint>[],
   });
 
-  final HealthConnectSdkStatus sdkStatus;
   final bool hasGrantedPermissions;
   final bool requestAuthorizationResult;
   final List<HealthDataPoint> points;
@@ -26,7 +24,7 @@ class _FakeHealthClient implements HealthClient {
 
   @override
   Future<HealthConnectSdkStatus?> getHealthConnectSdkStatus() async =>
-      sdkStatus;
+      HealthConnectSdkStatus.sdkAvailable;
 
   @override
   Future<List<HealthDataPoint>> getHealthDataFromTypes({
@@ -55,11 +53,9 @@ class _FakeHealthClient implements HealthClient {
 class _FakeHealthConnectLauncher implements HealthConnectLauncher {
   _FakeHealthConnectLauncher({
     this.openSettingsResult = true,
-    this.openStoreResult = true,
   });
 
   final bool openSettingsResult;
-  final bool openStoreResult;
 
   int settingsCalls = 0;
   int storeCalls = 0;
@@ -73,7 +69,7 @@ class _FakeHealthConnectLauncher implements HealthConnectLauncher {
   @override
   Future<bool> openHealthConnectStore() async {
     storeCalls += 1;
-    return openStoreResult;
+    return true;
   }
 }
 
@@ -151,6 +147,46 @@ void main() {
     expect(provider.freshnessLabel, 'Demo');
   });
 
+  test('loadToday never posts biometrics before authentication', () async {
+    final postedBodies = <String>[];
+    final mockClient = MockClient((req) async {
+      if (req.method == 'POST' && req.url.path.endsWith('/v1/biometrics')) {
+        postedBodies.add(req.body);
+        return http.Response('{"status":"ok"}', 201);
+      }
+      return http.Response('{}', 200);
+    });
+    final provider = BiometricsProvider(
+      HealthConnectService(
+        healthClient: _FakeHealthClient(
+          hasGrantedPermissions: true,
+          points: <HealthDataPoint>[
+            _numericPoint(
+              type: HealthDataType.STEPS,
+              value: 8500,
+              from: DateTime(2026, 4, 5, 8),
+            ),
+          ],
+        ),
+        platformOverride: TargetPlatform.android,
+        isWebOverride: false,
+      ),
+      apiClient: ApiClient(
+        baseUrl: 'https://example.test',
+        apiKey: 'legacy-key',
+        httpClient: mockClient,
+      ),
+      now: () => DateTime(2026, 4, 5, 12),
+      syncWindowDays: 3,
+    );
+
+    await provider.loadToday();
+
+    expect(provider.state, BiometricsState.live);
+    expect(provider.latest?.steps, 8500);
+    expect(postedBodies, isEmpty);
+  });
+
   test('loadToday syncs recent biometrics to cloud when API client is set',
       () async {
     final postedBodies = <String>[];
@@ -186,7 +222,7 @@ void main() {
       syncWindowDays: 3,
     );
 
-    await provider.loadToday();
+    await provider.setAuthenticatedUser('user-123');
 
     expect(provider.state, BiometricsState.live);
     expect(postedBodies, hasLength(3));
@@ -227,10 +263,57 @@ void main() {
       syncWindowDays: 1,
     );
 
-    await provider.loadToday();
+    await provider.setAuthenticatedUser('user-123');
 
     expect(provider.state, BiometricsState.live);
     expect(provider.latest?.steps, 8500);
     expect(provider.statusMessage, contains('סנכרון'));
+  });
+
+  test('authentication transition syncs once and sign-out clears user data',
+      () async {
+    var postCount = 0;
+    final mockClient = MockClient((req) async {
+      if (req.method == 'POST' && req.url.path.endsWith('/v1/biometrics')) {
+        postCount += 1;
+        return http.Response('{"status":"ok"}', 201);
+      }
+      return http.Response('{}', 200);
+    });
+    final provider = BiometricsProvider(
+      HealthConnectService(
+        healthClient: _FakeHealthClient(
+          hasGrantedPermissions: true,
+          points: <HealthDataPoint>[
+            _numericPoint(
+              type: HealthDataType.STEPS,
+              value: 8500,
+              from: DateTime(2026, 4, 5, 8),
+            ),
+          ],
+        ),
+        platformOverride: TargetPlatform.android,
+        isWebOverride: false,
+      ),
+      apiClient: ApiClient(
+        baseUrl: 'https://example.test',
+        apiKey: 'legacy-key',
+        httpClient: mockClient,
+      ),
+      now: () => DateTime(2026, 4, 5, 12),
+      syncWindowDays: 1,
+    );
+
+    await provider.setAuthenticatedUser('user-123');
+    await provider.setAuthenticatedUser('user-123');
+
+    expect(postCount, 1);
+    expect(provider.latest?.steps, 8500);
+
+    await provider.setAuthenticatedUser(null);
+
+    expect(provider.latest, isNull);
+    expect(provider.state, BiometricsState.idle);
+    expect(provider.lastUpdatedAt, isNull);
   });
 }

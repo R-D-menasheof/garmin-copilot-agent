@@ -2,13 +2,16 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
+import 'auth_http_client.dart';
 import '../models/analysis_summary.dart';
 import '../models/day_tracking_override.dart';
 import '../models/favorite_meal.dart';
 import '../models/goal_program.dart';
 import '../models/health_data_models.dart';
+import '../models/me_info.dart';
 import '../models/meal_entry.dart';
 import '../models/meal_template.dart';
+import '../models/medical_upload.dart';
 import '../models/plan_day.dart';
 import '../models/nutrition_goal.dart';
 import '../models/biometrics_record.dart';
@@ -21,18 +24,60 @@ import '../models/training_program.dart';
 class ApiClient {
   final String baseUrl;
   final String apiKey;
-  final http.Client _httpClient;
+  final AuthHttpClient _httpClient;
 
   ApiClient({
     required this.baseUrl,
     required this.apiKey,
     http.Client? httpClient,
-  }) : _httpClient = httpClient ?? http.Client();
+  }) : _httpClient =
+            AuthHttpClient(httpClient ?? http.Client(), apiKey: apiKey);
 
-  Map<String, String> get _headers => {
-        'x-api-key': apiKey,
+  /// Set the SSO bearer token used for `Authorization: Bearer` on every
+  /// request. Takes precedence over the transitional `x-api-key` header.
+  void updateToken(String token) => _httpClient.updateToken(token);
+
+  /// Drop the bearer token, reverting to the transitional `x-api-key` header.
+  void clearToken() => _httpClient.clearToken();
+
+  /// Register the callback used to silently refresh the token and retry once
+  /// when a request comes back `401 Unauthorized`.
+  void setTokenRefresher(Future<bool> Function()? refresher) =>
+      _httpClient.setRefresher(refresher);
+
+  Map<String, String> get _headers => const {
         'Content-Type': 'application/json',
       };
+
+  /// GET /v1/me — the authenticated user's identity + onboarding state.
+  Future<MeInfo> getMe() async {
+    final uri = Uri.parse('$baseUrl/v1/me');
+    final resp = await _httpClient.get(uri, headers: _headers);
+    _checkResponse(resp);
+    return MeInfo.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
+  }
+
+  /// GET /v1/profile — the user's full profile as a raw map.
+  Future<Map<String, dynamic>> getProfile() async {
+    final uri = Uri.parse('$baseUrl/v1/profile');
+    final resp = await _httpClient.get(uri, headers: _headers);
+    _checkResponse(resp);
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    return (body['profile'] as Map<String, dynamic>?) ?? <String, dynamic>{};
+  }
+
+  /// PATCH /v1/profile — merge the given fields into the profile.
+  Future<Map<String, dynamic>> patchProfile(Map<String, dynamic> changes) async {
+    final uri = Uri.parse('$baseUrl/v1/profile');
+    final resp = await _httpClient.patch(
+      uri,
+      headers: _headers,
+      body: jsonEncode(changes),
+    );
+    _checkResponse(resp);
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    return (body['profile'] as Map<String, dynamic>?) ?? <String, dynamic>{};
+  }
 
   // ── Read API ─────────────────────────────────────────────
 
@@ -52,6 +97,27 @@ class ApiClient {
           date,
           (list as List).map((m) => MealEntry.fromJson(m)).toList(),
         ));
+  }
+
+  /// GET /v1/biometrics?from=&to= — daily biometrics keyed by date.
+  Future<Map<DateTime, BiometricsRecord>> getBiometrics(
+    DateTime from,
+    DateTime to,
+  ) async {
+    final uri = Uri.parse('$baseUrl/v1/biometrics').replace(queryParameters: {
+      'from': _formatDate(from),
+      'to': _formatDate(to),
+    });
+    final resp = await _httpClient.get(uri, headers: _headers);
+    _checkResponse(resp);
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    final records = (body['biometrics'] as Map<String, dynamic>?) ?? {};
+    final result = <DateTime, BiometricsRecord>{};
+    records.forEach((date, value) {
+      result[DateTime.parse(date)] =
+          BiometricsRecord.fromJson(value as Map<String, dynamic>);
+    });
+    return result;
   }
 
   Future<NutritionGoal?> getGoals() async {
@@ -437,6 +503,59 @@ class ApiClient {
         'tracked': tracked,
         if (note != null) 'note': note,
       }),
+    );
+    _checkResponse(resp);
+  }
+
+  // ── Medical documents (in-app upload) ─────────────────
+
+  /// POST /v1/medical/upload — upload a document (base64 body). Returns the
+  /// stored document's metadata.
+  Future<MedicalUpload> uploadMedicalDocument({
+    required Uint8List bytes,
+    required String filename,
+    required String contentType,
+    String category = '',
+    String note = '',
+  }) async {
+    final uri = Uri.parse('$baseUrl/v1/medical/upload');
+    final payload = <String, dynamic>{
+      'filename': filename,
+      'content_type': contentType,
+      'content': base64Encode(bytes),
+      if (category.isNotEmpty) 'category': category,
+      if (note.isNotEmpty) 'note': note,
+    };
+    final resp = await _httpClient.post(
+      uri,
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    _checkResponse(resp);
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    return MedicalUpload.fromJson(body['upload'] as Map<String, dynamic>);
+  }
+
+  /// GET /v1/medical/uploads — list the user's uploaded documents (metadata).
+  Future<List<MedicalUpload>> getMedicalUploads() async {
+    final uri = Uri.parse('$baseUrl/v1/medical/uploads');
+    final resp = await _httpClient.get(uri, headers: _headers);
+    _checkResponse(resp);
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    return (body['uploads'] as List? ?? [])
+        .map((u) => MedicalUpload.fromJson(u as Map<String, dynamic>))
+        .toList();
+  }
+
+  // ── Push notifications ───────────────────────────────────
+
+  /// POST /v1/push/register — register this device's FCM token for push.
+  Future<void> registerPushToken(String token, {String platform = 'android'}) async {
+    final uri = Uri.parse('$baseUrl/v1/push/register');
+    final resp = await _httpClient.post(
+      uri,
+      headers: _headers,
+      body: jsonEncode({'token': token, 'platform': platform}),
     );
     _checkResponse(resp);
   }

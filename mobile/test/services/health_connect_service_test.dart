@@ -80,6 +80,11 @@ void main() {
             from: day,
           ),
           _numericPoint(
+            type: HealthDataType.HEART_RATE_VARIABILITY_RMSSD,
+            value: 42,
+            from: day,
+          ),
+          _numericPoint(
             type: HealthDataType.HEART_RATE,
             value: 64,
             from: day.add(const Duration(hours: 1)),
@@ -136,6 +141,7 @@ void main() {
 
     expect(granted, isTrue);
     expect(record.restingHr, 58);
+    expect(record.hrvMs, 42);
     expect(record.avgHr, 78);
     expect(record.maxHr, 92);
     expect(record.steps, 8500);

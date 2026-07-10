@@ -40,6 +40,9 @@ class BiometricsRecord {
   final double? bmi;
   final double? basalMetabolicRate; // kcal/day (BMR)
 
+  // ── Fitness ────────────────────────────────────────────
+  final double? vo2max;         // ml/kg/min (cardio fitness)
+
   // ── Hydration ──────────────────────────────────────────
   final double? waterMl;        // water consumed (ml)
 
@@ -71,6 +74,7 @@ class BiometricsRecord {
     this.bodyFatPct,
     this.bmi,
     this.basalMetabolicRate,
+    this.vo2max,
     this.waterMl,
   });
 
@@ -108,6 +112,8 @@ class BiometricsRecord {
         bodyFatPct: (json['body_fat_pct'] as num?)?.toDouble(),
         bmi: (json['bmi'] as num?)?.toDouble(),
         basalMetabolicRate: (json['basal_metabolic_rate'] as num?)?.toDouble(),
+        // Fitness
+        vo2max: (json['vo2max'] as num?)?.toDouble(),
         // Hydration
         waterMl: (json['water_ml'] as num?)?.toDouble(),
       );
@@ -145,6 +151,8 @@ class BiometricsRecord {
         if (bodyFatPct != null) 'body_fat_pct': bodyFatPct,
         if (bmi != null) 'bmi': bmi,
         if (basalMetabolicRate != null) 'basal_metabolic_rate': basalMetabolicRate,
+        // Fitness
+        if (vo2max != null) 'vo2max': vo2max,
         // Hydration
         if (waterMl != null) 'water_ml': waterMl,
       };

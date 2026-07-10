@@ -27,6 +27,29 @@ void main() {
       expect(find.text('RHR (bpm)'), findsOneWidget);
     });
 
+    testWidgets('omits unit suffix when unit is empty', (tester) async {
+      final data = [
+        (DateTime(2026, 3, 28), 8000.0),
+        (DateTime(2026, 4, 4), 8500.0),
+      ];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TrendChart(
+              title: 'צעדים',
+              unit: '',
+              color: Colors.green,
+              data: data,
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('צעדים'), findsOneWidget);
+      expect(find.text('צעדים ()'), findsNothing);
+    });
+
     testWidgets('renders bottom axis labels with month and year when configured', (tester) async {
       final data = [
         (DateTime(2020, 2, 26), 104.0),
