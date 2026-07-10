@@ -4,13 +4,17 @@ Stores nutrition data, goals, biometrics, and food cache as
 date-stamped JSON blobs in the ``vitalis-data`` container.
 Mirrors the local ``data_store.py`` pattern.
 
+All per-user data is scoped under ``users/{user_id}/``; the food cache is
+global (shared across users to maximise cache hits and minimise LLM cost).
+
 Blob layout::
 
     vitalis-data/
-    ├── meals/{YYYY-MM-DD}.json           # list[MealEntry]
-    ├── goals/current.json                # NutritionGoal
-    ├── biometrics/{YYYY-MM-DD}.json      # BiometricsRecord
-    └── food_cache/known_foods.json       # list[KnownFood]
+    ├── users/{user_id}/meals/{YYYY-MM-DD}.json       # list[MealEntry]
+    ├── users/{user_id}/goals/current.json            # NutritionGoal
+    ├── users/{user_id}/biometrics/{YYYY-MM-DD}.json  # BiometricsRecord
+    ├── users/{user_id}/profile.json                  # Profile
+    └── food_cache/known_foods.json                   # list[KnownFood] (global)
 """
 
 from __future__ import annotations
@@ -33,8 +37,11 @@ from vitalis.models import (
     LabTrend,
     MealEntry,
     MealTemplate,
+    MedicalUpload,
     NutritionGoal,
     PlanDay,
+    Profile,
+    PushToken,
     RecommendationStatus,
     SleepChecklist,
     SleepEntry,
@@ -52,11 +59,15 @@ class BlobStore:
         self,
         connection_string: str | None = None,
         container_name: str = "vitalis-data",
+        user_id: str = "roei",
     ) -> None:
         conn = connection_string or os.environ["AZURE_STORAGE_CONNECTION_STRING"]
         client = BlobServiceClient.from_connection_string(conn)
         self._container = client.get_container_client(container_name)
         self._container_name = container_name
+        # All per-user data lives under ``users/{user_id}/``. Derived
+        # server-side from the authenticated caller — never client input.
+        self._user_id = user_id
 
     # ── Meals ──────────────────────────────────────────────────────
 
@@ -94,8 +105,8 @@ class BlobStore:
     def load_recent_meals(self, limit: int = 10) -> list[MealEntry]:
         """Return the latest unique meals derived from persisted meal history."""
         all_meals: list[MealEntry] = []
-        for blob in self._container.list_blobs(name_starts_with="meals/"):
-            raw = self._download(blob.name)
+        for blob in self._container.list_blobs(name_starts_with=self._key("meals/")):
+            raw = self._download_raw(blob.name)
             if raw is None:
                 continue
             all_meals.extend(MealEntry.model_validate(item) for item in json.loads(raw))
@@ -156,8 +167,8 @@ class BlobStore:
     # ── Food Cache ─────────────────────────────────────────────────
 
     def load_food_cache(self) -> list[KnownFood]:
-        """Load the food cache. Returns [] if empty/missing."""
-        raw = self._download("food_cache/known_foods.json")
+        """Load the shared, global food cache. Returns [] if empty/missing."""
+        raw = self._download_raw("food_cache/known_foods.json")
         if raw is None:
             return []
         return [KnownFood.model_validate(item) for item in json.loads(raw)]
@@ -174,7 +185,7 @@ class BlobStore:
             [f.model_dump(mode="json") for f in cache],
             ensure_ascii=False,
         )
-        self._upload("food_cache/known_foods.json", data)
+        self._upload_raw("food_cache/known_foods.json", data)
         logger.info("Added '%s' to food cache (%d total)", food.food_name, len(cache))
 
     # ── Favorites ──────────────────────────────────────────────────
@@ -252,16 +263,17 @@ class BlobStore:
 
     def load_summary_history(self, limit: int = 4) -> list[AnalysisSummary]:
         """Load published summary history ordered newest first."""
+        latest_name = self._key("summaries/latest.json")
         names = [
             blob.name
-            for blob in self._container.list_blobs(name_starts_with="summaries/")
-            if blob.name != "summaries/latest.json" and blob.name.endswith(".json")
+            for blob in self._container.list_blobs(name_starts_with=self._key("summaries/"))
+            if blob.name != latest_name and blob.name.endswith(".json")
         ]
         names.sort(reverse=True)
 
         summaries: list[AnalysisSummary] = []
         for name in names[:limit]:
-            raw = self._download(name)
+            raw = self._download_raw(name)
             if raw is None:
                 continue
             summaries.append(AnalysisSummary.model_validate_json(raw))
@@ -332,9 +344,9 @@ class BlobStore:
         """Load all goal programs."""
         programs: list[GoalProgram] = []
         try:
-            blobs = self._container.list_blobs(name_starts_with="goals/programs/")
+            blobs = self._container.list_blobs(name_starts_with=self._key("goals/programs/"))
             for blob in blobs:
-                raw = self._download(blob.name)
+                raw = self._download_raw(blob.name)
                 if raw:
                     programs.append(GoalProgram.model_validate_json(raw))
         except Exception:
@@ -388,6 +400,19 @@ class BlobStore:
             return []
         return [LabTrend.model_validate(item) for item in json.loads(raw)]
 
+    # ── Profile ─────────────────────────────────
+
+    def save_profile(self, profile: Profile) -> None:
+        """Persist the user's profile."""
+        self._upload("profile.json", profile.model_dump_json())
+
+    def load_profile(self) -> Profile | None:
+        """Load the user's profile. Returns None if not set."""
+        raw = self._download("profile.json")
+        if raw is None:
+            return None
+        return Profile.model_validate_json(raw)
+
     # ── Day Tracking Overrides ───────────────────────────────────
 
     def save_day_overrides(self, overrides: list[DayTrackingOverride]) -> None:
@@ -426,17 +451,121 @@ class BlobStore:
             },
         }
 
+    # ── Push tokens (notifications) ────────────────────────────────
+
+    def load_push_tokens(self) -> list[PushToken]:
+        """Load this user's registered device push tokens. [] if none."""
+        raw = self._download("push/tokens.json")
+        if raw is None:
+            return []
+        return [PushToken.model_validate(item) for item in json.loads(raw)]
+
+    def save_push_token(self, token: PushToken) -> None:
+        """Register or refresh a device push token (dedup by token string)."""
+        tokens = [t for t in self.load_push_tokens() if t.token != token.token]
+        tokens.append(token)
+        data = json.dumps(
+            [t.model_dump(mode="json") for t in tokens],
+            ensure_ascii=False,
+        )
+        self._upload("push/tokens.json", data)
+        logger.info("Saved push token (%d total for user)", len(tokens))
+
+    def delete_push_token(self, token_str: str) -> None:
+        """Unregister a device push token by its token string."""
+        tokens = [t for t in self.load_push_tokens() if t.token != token_str]
+        data = json.dumps(
+            [t.model_dump(mode="json") for t in tokens],
+            ensure_ascii=False,
+        )
+        self._upload("push/tokens.json", data)
+
+    # ── Medical uploads (in-app documents) ──────────────────────
+
+    def load_medical_uploads(self) -> list[MedicalUpload]:
+        """List this user's uploaded medical documents (metadata). [] if none."""
+        raw = self._download("medical/uploads/index.json")
+        if raw is None:
+            return []
+        return [MedicalUpload.model_validate(item) for item in json.loads(raw)]
+
+    def save_medical_upload(self, upload: MedicalUpload, content: bytes) -> None:
+        """Store a raw medical document + its index entry (dedup by id)."""
+        self._upload_bytes(
+            f"medical/uploads/{upload.id}_{upload.filename}", content
+        )
+        uploads = [u for u in self.load_medical_uploads() if u.id != upload.id]
+        uploads.append(upload)
+        data = json.dumps(
+            [u.model_dump(mode="json") for u in uploads],
+            ensure_ascii=False,
+        )
+        self._upload("medical/uploads/index.json", data)
+        logger.info(
+            "Saved medical upload %s (%d bytes)", upload.filename, upload.size_bytes
+        )
+
+    def load_medical_upload_content(self, upload_id: str) -> bytes | None:
+        """Download the raw bytes of a stored medical document by id."""
+        for upload in self.load_medical_uploads():
+            if upload.id == upload_id:
+                return self._download_bytes(
+                    f"medical/uploads/{upload.id}_{upload.filename}"
+                )
+        return None
+
+    def mark_medical_upload_extracted(self, upload_id: str) -> None:
+        """Mark an upload as extracted (owner op after local extraction, 6.3)."""
+        uploads = self.load_medical_uploads()
+        for upload in uploads:
+            if upload.id == upload_id:
+                upload.extracted = True
+        data = json.dumps(
+            [u.model_dump(mode="json") for u in uploads],
+            ensure_ascii=False,
+        )
+        self._upload("medical/uploads/index.json", data)
+
     # ── Private helpers ────────────────────────────────────────────
 
+    def _key(self, blob_name: str) -> str:
+        """Prefix a blob name with the current user's scope."""
+        return f"users/{self._user_id}/{blob_name}"
+
     def _upload(self, blob_name: str, data: str) -> None:
-        """Upload string data to a blob (overwrite if exists)."""
+        """Upload string data to a user-scoped blob (overwrite if exists)."""
+        self._upload_raw(self._key(blob_name), data)
+
+    def _download(self, blob_name: str) -> str | None:
+        """Download a user-scoped blob as string. None if it doesn't exist."""
+        return self._download_raw(self._key(blob_name))
+
+    def _upload_raw(self, blob_name: str, data: str) -> None:
+        """Upload to an exact blob path (no user scoping).
+
+        Used for global/shared blobs (food cache) and for full paths that
+        already came back prefixed from ``list_blobs``.
+        """
         blob_client = self._container.get_blob_client(blob_name)
         blob_client.upload_blob(data, overwrite=True)
 
-    def _download(self, blob_name: str) -> str | None:
-        """Download blob as string. Returns None if blob doesn't exist."""
+    def _download_raw(self, blob_name: str) -> str | None:
+        """Download an exact blob path (no user scoping). None if missing."""
         try:
             blob_client = self._container.get_blob_client(blob_name)
             return blob_client.download_blob().readall().decode()
+        except ResourceNotFoundError:
+            return None
+
+    def _upload_bytes(self, blob_name: str, data: bytes) -> None:
+        """Upload raw bytes to a user-scoped blob (overwrite if exists)."""
+        blob_client = self._container.get_blob_client(self._key(blob_name))
+        blob_client.upload_blob(data, overwrite=True)
+
+    def _download_bytes(self, blob_name: str) -> bytes | None:
+        """Download a user-scoped blob as raw bytes. None if missing."""
+        try:
+            blob_client = self._container.get_blob_client(self._key(blob_name))
+            return blob_client.download_blob().readall()
         except ResourceNotFoundError:
             return None

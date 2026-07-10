@@ -50,9 +50,17 @@ class GarminClient:
         email: str | None = None,
         password: str | None = None,
         tokenstore: str | None = None,
+        use_env_credentials: bool = True,
     ) -> None:
-        self._email = email or os.getenv("GARMIN_EMAIL", "")
-        self._password = password or os.getenv("GARMIN_PASSWORD", "")
+        if use_env_credentials:
+            self._email = email if email is not None else os.getenv("GARMIN_EMAIL", "")
+            self._password = (
+                password if password is not None else os.getenv("GARMIN_PASSWORD", "")
+            )
+        else:
+            # Multi-user sync must never inherit the owner's Garmin account.
+            self._email = email or ""
+            self._password = password or ""
         self._tokenstore = tokenstore or os.getenv("GARMINTOKENS", str(_DEFAULT_TOKEN_DIR))
         self._api: Garmin | None = None
 
@@ -101,6 +109,7 @@ class GarminClient:
             # garminconnect 0.3.3: client_state is unused (MFA state is held
             # on the Garmin instance itself); only mfa_code matters.
             self._api.resume_login(session.get("state") or {}, mfa_code)
+            self._load_profile_and_settings()
             try:
                 self._api.client.dump(str(tokenstore_path))
                 logger.info("MFA login completed; tokens saved to %s", tokenstore_path)
@@ -122,6 +131,8 @@ class GarminClient:
             try:
                 self._api = Garmin()
                 self._api.login(str(tokenstore_path))
+                if not getattr(self._api, "display_name", None):
+                    self._load_profile_and_settings()
                 logger.info("Logged in using stored OAuth tokens.")
                 try:
                     self._api.client.dump(str(tokenstore_path))
@@ -175,6 +186,7 @@ class GarminClient:
             )
 
         # ----- Success without MFA -----
+        self._load_profile_and_settings()
         try:
             self._api.client.dump(str(tokenstore_path))
             logger.info("OAuth tokens saved to %s", tokenstore_path)
@@ -189,8 +201,16 @@ class GarminClient:
         """
         if self._api is None:
             return
+        transport = getattr(self._api, "client", None) or getattr(
+            self._api,
+            "garth",
+            None,
+        )
+        if transport is None or not hasattr(transport, "connectapi"):
+            logger.warning("Could not load Garmin profile: no Connect API transport")
+            return
         try:
-            profile = self._api.garth.connectapi(
+            profile = transport.connectapi(
                 "/userprofile-service/userprofile/profile"
             )
             if profile and isinstance(profile, dict):
@@ -199,7 +219,7 @@ class GarminClient:
         except Exception as exc:
             logger.warning("Could not load profile: %s", exc)
         try:
-            settings = self._api.garth.connectapi(
+            settings = transport.connectapi(
                 "/userprofile-service/userprofile/user-settings"
             )
             if settings and isinstance(settings, dict) and "userData" in settings:

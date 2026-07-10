@@ -129,6 +129,9 @@ class BiometricsRecord(BaseModel):
     bmi: Optional[float] = None
     basal_metabolic_rate: Optional[float] = None
 
+    # Fitness
+    vo2max: Optional[float] = None
+
     # Hydration
     water_ml: Optional[float] = None
 
@@ -220,6 +223,27 @@ class MedicalIndex(BaseModel):
 
     records: list[MedicalRecord] = Field(default_factory=list)
     last_updated: str = ""
+
+
+class MedicalUpload(BaseModel):
+    """Metadata for a user-uploaded medical document (Phase 4b).
+
+    Raw file bytes are stored at ``users/{uid}/medical/uploads/{id}_{filename}``;
+    this is the index entry (``users/{uid}/medical/uploads/index.json`` holds the
+    list). Extraction is done later by the owner locally, so ``extracted`` stays
+    False until the owner processes it (Phase 6.3).
+    """
+
+    id: str
+    filename: str
+    content_type: str = Field(
+        description="MIME type: application/pdf, image/jpeg, image/png"
+    )
+    size_bytes: int = Field(ge=0)
+    category: str = Field(default="", description="Optional user label")
+    note: str = ""
+    uploaded_at: datetime = Field(default_factory=datetime.now)
+    extracted: bool = False
 
 
 # ── Health Analysis ────────────────────────────────────────────────
@@ -448,3 +472,107 @@ class LabTrend(BaseModel):
     metric: str
     display_name_he: str = ""
     values: list[LabDataPoint] = Field(default_factory=list)
+
+
+# ── User Profile ──────────────────────────────────────────────────
+
+
+class Medication(BaseModel):
+    """A medication the user takes (or has stopped)."""
+
+    name: str
+    type: str = ""
+    dose: str = ""
+    frequency: str = ""
+    purpose: str = ""
+    since: Optional[str] = None
+    stopped: Optional[str] = None
+    note: str = ""
+
+
+class Supplement(BaseModel):
+    """A supplement the user takes."""
+
+    name: str
+    dosage: str = ""
+    timing: str = ""
+    since: Optional[str] = None
+    stopped: Optional[str] = None
+    note: str = ""
+
+
+class HealthLogEntry(BaseModel):
+    """A timestamped free-text health note."""
+
+    date: DateValue
+    note: str = ""
+
+
+class Device(BaseModel):
+    """A connected wearable device."""
+
+    name: str
+    type: str = ""
+
+
+class Profile(BaseModel):
+    """User health profile — personal info plus auto-synced wearable metrics.
+
+    One profile per user, stored at ``users/{user_id}/profile.json``. Personal
+    fields are user-editable (via onboarding or the in-app profile screen);
+    auto-synced fields are populated from wearable data and are read-only in
+    the UI. Isolation is by blob path, so the model carries no user_id.
+    """
+
+    # Identity (from SSO; email lets the owner map opaque ids to people)
+    display_name: str = ""
+    email: str = ""
+
+    # Personal — user editable
+    date_of_birth: Optional[DateValue] = None
+    sex: Optional[str] = Field(default=None, description="Biological sex / gender")
+    height_cm: Optional[float] = Field(default=None, ge=0)
+    goals: list[str] = Field(default_factory=list)
+    injuries: list[str] = Field(default_factory=list)
+    dietary_preferences: list[str] = Field(default_factory=list)
+    notes: str = ""
+    current_medications: list[Medication] = Field(default_factory=list)
+    supplements: list[Supplement] = Field(default_factory=list)
+    health_log: list[HealthLogEntry] = Field(default_factory=list)
+
+    # Legacy age (owner's pre-migration profile.yaml); prefer date_of_birth.
+    age: Optional[float] = Field(default=None, ge=0)
+
+    # Auto-synced from wearable — read-only in the UI
+    weight_kg: Optional[float] = None
+    body_fat_pct: Optional[float] = None
+    bmi: Optional[float] = None
+    vo2max: Optional[float] = None
+    fitness_age: Optional[int] = None
+    resting_heart_rate: Optional[int] = None
+    devices: list[Device] = Field(default_factory=list)
+    last_synced: Optional[str] = None
+
+    # Lifecycle
+    onboarded: bool = False
+
+    @property
+    def age_years(self) -> Optional[float]:
+        """Age from ``date_of_birth``, falling back to the legacy ``age`` field."""
+        if self.date_of_birth is not None:
+            return round((DateValue.today() - self.date_of_birth).days / 365.25, 1)
+        return self.age
+
+
+class PushToken(BaseModel):
+    """A device's push-notification registration token (Phase 7).
+
+    Stored per user at ``users/{user_id}/push/tokens.json`` (a list). Android
+    push is delivered via FCM through Azure Notification Hubs; ``token`` is the
+    FCM registration token uploaded by the mobile app after sign-in.
+    """
+
+    token: str = Field(min_length=1, description="FCM registration token")
+    platform: str = Field(default="android", description="Device platform")
+    device_label: str = Field(default="", description="Optional device name")
+    updated_at: datetime = Field(default_factory=datetime.now)

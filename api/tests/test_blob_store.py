@@ -22,9 +22,12 @@ from vitalis.models import (
     LabStatus,
     LabTrend,
     MealEntry,
+    MedicalUpload,
     Milestone,
     NutritionGoal,
     NutritionSource,
+    Profile,
+    PushToken,
     RecStatus,
     RecommendationStatus,
     SleepChecklist,
@@ -92,15 +95,19 @@ class InMemoryBlobStore:
 
     def __init__(self) -> None:
         self._data: dict[str, bytes] = {}
+        self._user_id = "roei"
 
-    def build(self) -> BlobStore:
-        """Create a BlobStore wired to in-memory storage."""
+    def build(self, user_id: str = "roei") -> BlobStore:
+        """Create a BlobStore wired to in-memory storage, scoped to user_id."""
+        self._user_id = user_id
         store = BlobStore.__new__(BlobStore)
         store._container_name = "vitalis-data"
+        store._user_id = user_id
 
         # Mock container client
         container = MagicMock()
         container.get_blob_client = MagicMock(side_effect=self._get_blob_client)
+        container.list_blobs = MagicMock(side_effect=self._list_blobs)
         store._container = container
 
         return store
@@ -123,10 +130,28 @@ class InMemoryBlobStore:
         client.download_blob = MagicMock(side_effect=download)
         return client
 
-    def get_raw(self, blob: str) -> dict | list | None:
+    def _list_blobs(self, name_starts_with: str = "") -> list:
+        items = []
+        for key in list(self._data.keys()):
+            if key.startswith(name_starts_with):
+                item = MagicMock()
+                item.name = key
+                items.append(item)
+        return items
+
+    def get_raw(self, blob: str, *, user: str | None = None) -> dict | list | None:
+        """Read a user-scoped blob (auto-prefixed with users/{user_id}/)."""
+        key = f"users/{user or self._user_id}/{blob}"
+        if key not in self._data:
+            return None
+        return json.loads(self._data[key])
+
+    def get_raw_global(self, blob: str) -> dict | list | None:
+        """Read a global (non-user-scoped) blob such as the food cache."""
         if blob not in self._data:
             return None
         return json.loads(self._data[blob])
+
 
 
 @pytest.fixture
@@ -505,6 +530,128 @@ class TestCombined:
         assert "2026-04-04" in result["biometrics"]
 
 
+# ── User Scoping (multi-tenant isolation) ─────────────────────────
+
+
+class TestUserScoping:
+    def test_meal_blob_path_is_user_scoped(self) -> None:
+        backend = InMemoryBlobStore()
+        store = backend.build(user_id="alice")
+        store.save_meals(date(2026, 4, 4), [_meal("apple")])
+
+        assert "users/alice/meals/2026-04-04.json" in backend._data
+        assert "meals/2026-04-04.json" not in backend._data
+
+    def test_meals_isolated_between_users(self) -> None:
+        backend = InMemoryBlobStore()
+        store_a = backend.build(user_id="alice")
+        store_b = backend.build(user_id="bob")
+
+        store_a.save_meals(date(2026, 4, 4), [_meal("apple")])
+
+        assert store_b.load_meals(date(2026, 4, 4)) == []
+        assert len(store_a.load_meals(date(2026, 4, 4))) == 1
+
+    def test_biometrics_isolated_between_users(self) -> None:
+        backend = InMemoryBlobStore()
+        store_a = backend.build(user_id="alice")
+        store_b = backend.build(user_id="bob")
+
+        store_a.save_biometrics(date(2026, 4, 4), _biometrics())
+
+        assert store_b.load_biometrics_range(date(2026, 4, 4), date(2026, 4, 4)) == {}
+        got_a = store_a.load_biometrics_range(date(2026, 4, 4), date(2026, 4, 4))
+        assert date(2026, 4, 4) in got_a
+
+    def test_goals_isolated_between_users(self) -> None:
+        backend = InMemoryBlobStore()
+        store_a = backend.build(user_id="alice")
+        store_b = backend.build(user_id="bob")
+
+        store_a.save_goals(_goal())
+
+        assert store_b.load_goals() is None
+        assert store_a.load_goals() is not None
+
+    def test_food_cache_is_shared_across_users(self) -> None:
+        backend = InMemoryBlobStore()
+        store_a = backend.build(user_id="alice")
+        store_b = backend.build(user_id="bob")
+
+        store_a.append_food_cache(_known_food("cottage"))
+
+        names_b = [f.food_name for f in store_b.load_food_cache()]
+        assert "cottage" in names_b
+        # stored at a global (non-user-scoped) path
+        assert backend.get_raw_global("food_cache/known_foods.json") is not None
+        assert "users/alice/food_cache/known_foods.json" not in backend._data
+
+    def test_recent_meals_respect_user_scope(self) -> None:
+        backend = InMemoryBlobStore()
+        store_a = backend.build(user_id="alice")
+        store_b = backend.build(user_id="bob")
+
+        store_a.save_meals(date(2026, 4, 4), [_meal("apple")])
+        store_b.save_meals(date(2026, 4, 5), [_meal("banana")])
+
+        a_recents = [m.food_name for m in store_a.load_recent_meals()]
+        assert a_recents == ["apple"]
+
+    def test_goal_programs_respect_user_scope(self) -> None:
+        backend = InMemoryBlobStore()
+        store_a = backend.build(user_id="alice")
+        store_b = backend.build(user_id="bob")
+
+        store_a.save_goal_program(GoalProgram(id="p-alice", name_he="A", duration_weeks=4))
+        store_b.save_goal_program(GoalProgram(id="p-bob", name_he="B", duration_weeks=4))
+
+        a_ids = [p.id for p in store_a.load_goal_programs()]
+        assert a_ids == ["p-alice"]
+
+    def test_default_user_is_owner_for_backcompat(self) -> None:
+        backend = InMemoryBlobStore()
+        store = backend.build()  # default user
+        store.save_meals(date(2026, 4, 4), [_meal("apple")])
+        assert "users/roei/meals/2026-04-04.json" in backend._data
+
+
+# ── Profile ───────────────────────────────────────────────────────
+
+
+class TestProfile:
+    def test_save_and_load_profile(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        p = Profile(
+            display_name="Roei", date_of_birth=date(1989, 12, 1), onboarded=True,
+        )
+        store.save_profile(p)
+
+        loaded = store.load_profile()
+        assert loaded is not None
+        assert loaded.display_name == "Roei"
+        assert loaded.date_of_birth == date(1989, 12, 1)
+        assert loaded.onboarded is True
+
+    def test_load_profile_empty_returns_none(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        assert store.load_profile() is None
+
+    def test_profile_blob_path_is_user_scoped(self, store_and_backend) -> None:
+        store, backend = store_and_backend
+        store.save_profile(Profile(display_name="Roei"))
+        assert "users/roei/profile.json" in backend._data
+
+    def test_profile_isolated_between_users(self) -> None:
+        backend = InMemoryBlobStore()
+        store_a = backend.build(user_id="alice")
+        store_b = backend.build(user_id="bob")
+
+        store_a.save_profile(Profile(display_name="Alice"))
+
+        assert store_b.load_profile() is None
+        assert store_a.load_profile().display_name == "Alice"
+
+
 # ── Connection ────────────────────────────────────────────────────
 
 
@@ -519,3 +666,109 @@ class TestConnection:
         mock_bsc.from_connection_string.assert_called_once_with(
             "DefaultEndpointsProtocol=https;AccountName=test"
         )
+
+
+# ── Push tokens ─────────────────────────────────────
+
+
+class TestPushTokens:
+    def test_save_and_load_roundtrip(self, store_and_backend) -> None:
+        store, backend = store_and_backend
+        store.save_push_token(PushToken(token="fcm-1", platform="android"))
+
+        tokens = store.load_push_tokens()
+        assert len(tokens) == 1
+        assert tokens[0].token == "fcm-1"
+        assert "users/roei/push/tokens.json" in backend._data
+
+    def test_load_empty_returns_list(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        assert store.load_push_tokens() == []
+
+    def test_dedup_by_token_string(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        store.save_push_token(PushToken(token="fcm-1", device_label="old"))
+        store.save_push_token(PushToken(token="fcm-1", device_label="new"))
+
+        tokens = store.load_push_tokens()
+        assert len(tokens) == 1
+        assert tokens[0].device_label == "new"
+
+    def test_delete_token(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        store.save_push_token(PushToken(token="fcm-1"))
+        store.save_push_token(PushToken(token="fcm-2"))
+
+        store.delete_push_token("fcm-1")
+
+        assert [t.token for t in store.load_push_tokens()] == ["fcm-2"]
+
+    def test_tokens_isolated_between_users(self) -> None:
+        backend = InMemoryBlobStore()
+        store_a = backend.build(user_id="alice")
+        store_b = backend.build(user_id="bob")
+
+        store_a.save_push_token(PushToken(token="fcm-alice"))
+
+        assert store_b.load_push_tokens() == []
+        assert [t.token for t in store_a.load_push_tokens()] == ["fcm-alice"]
+
+
+# ── Medical uploads ─────────────────────────────────
+
+
+def _upload(upload_id: str = "u1", filename: str = "labs.pdf") -> MedicalUpload:
+    return MedicalUpload(
+        id=upload_id, filename=filename,
+        content_type="application/pdf", size_bytes=3,
+    )
+
+
+class TestMedicalUploads:
+    def test_save_and_list_roundtrip(self, store_and_backend) -> None:
+        store, backend = store_and_backend
+        store.save_medical_upload(_upload(), b"abc")
+
+        uploads = store.load_medical_uploads()
+        assert len(uploads) == 1
+        assert uploads[0].filename == "labs.pdf"
+        assert "users/roei/medical/uploads/index.json" in backend._data
+        assert "users/roei/medical/uploads/u1_labs.pdf" in backend._data
+
+    def test_load_empty_returns_list(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        assert store.load_medical_uploads() == []
+
+    def test_content_roundtrip(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        store.save_medical_upload(_upload(), b"%PDF-1.4 binary")
+        assert store.load_medical_upload_content("u1") == b"%PDF-1.4 binary"
+
+    def test_content_missing_returns_none(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        assert store.load_medical_upload_content("nope") is None
+
+    def test_dedup_by_id(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        store.save_medical_upload(_upload(filename="a.pdf"), b"a")
+        store.save_medical_upload(_upload(filename="b.pdf"), b"bb")
+
+        uploads = store.load_medical_uploads()
+        assert len(uploads) == 1
+        assert uploads[0].filename == "b.pdf"
+
+    def test_mark_extracted(self, store_and_backend) -> None:
+        store, _ = store_and_backend
+        store.save_medical_upload(_upload(), b"abc")
+        store.mark_medical_upload_extracted("u1")
+        assert store.load_medical_uploads()[0].extracted is True
+
+    def test_isolation_between_users(self) -> None:
+        backend = InMemoryBlobStore()
+        store_a = backend.build(user_id="alice")
+        store_b = backend.build(user_id="bob")
+
+        store_a.save_medical_upload(_upload(), b"abc")
+
+        assert store_b.load_medical_uploads() == []
+        assert len(store_a.load_medical_uploads()) == 1

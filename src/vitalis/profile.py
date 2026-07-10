@@ -108,57 +108,104 @@ def update_from_garmin(
     """
     profile = load_profile(path)
 
-    # Extract weight / body-fat from body_composition
-    body_comp = raw_data.get("body_composition", [])
-    if body_comp:
-        latest = body_comp[-1] if isinstance(body_comp, list) else body_comp
-        if isinstance(latest, dict):
-            weight = latest.get("weight")
-            if weight and isinstance(weight, (int, float)) and weight > 0:
-                # Garmin API returns grams
-                profile["weight_kg"] = round(weight / 1000, 1) if weight > 500 else round(weight, 1)
-            if latest.get("bodyFat"):
-                profile["body_fat_pct"] = round(latest["bodyFat"], 1)
-            if latest.get("bmi"):
-                profile["bmi"] = round(latest["bmi"], 1)
-
-    # Extract resting heart rate from daily stats
-    daily_stats = raw_data.get("daily_stats", [])
-    if daily_stats and isinstance(daily_stats, list):
-        latest_stats = daily_stats[-1]
-        if isinstance(latest_stats, dict):
-            rhr = latest_stats.get("restingHeartRate")
-            if rhr:
-                profile["resting_heart_rate"] = rhr
-
-    # Extract VO2max / fitness age from max_metrics
-    max_metrics = raw_data.get("max_metrics", {})
-    if isinstance(max_metrics, dict):
-        generic = max_metrics.get("generic", {})
-        if isinstance(generic, dict):
-            vo2 = generic.get("vo2MaxPreciseValue") or generic.get("vo2MaxValue")
-            if vo2:
-                profile["vo2max"] = round(vo2, 1)
-            fa = generic.get("fitnessAge")
-            if fa:
-                profile["fitness_age"] = fa
-
-    # Devices
-    devices = raw_data.get("devices", [])
-    if devices and isinstance(devices, list):
-        profile["devices"] = [
-            {
-                "name": d.get("productDisplayName", d.get("deviceName", "unknown")),
-                "type": d.get("deviceTypeName", ""),
-            }
-            for d in devices
-            if isinstance(d, dict)
-        ]
+    profile.update(extract_garmin_profile_fields(raw_data))
 
     profile["last_synced"] = date.today().isoformat()
 
     save_profile(profile, path)
     return profile
+
+
+def extract_garmin_profile_fields(raw_data: dict[str, Any]) -> dict[str, Any]:
+    """Extract Garmin-owned profile fields without reading or writing a profile.
+
+    Supports both simplified legacy fixtures and the nested shapes returned by
+    current Garmin Connect endpoints. The pure result is also used by the
+    owner-side per-user cloud sync.
+    """
+    fields: dict[str, Any] = {}
+
+    weight_rows: list[dict[str, Any]] = []
+    body_comp = raw_data.get("body_composition", [])
+    containers = body_comp if isinstance(body_comp, list) else [body_comp]
+    for container in containers:
+        if not isinstance(container, dict):
+            continue
+        nested = container.get("dateWeightList")
+        if isinstance(nested, list):
+            weight_rows.extend(row for row in nested if isinstance(row, dict))
+        elif any(key in container for key in ("weight", "bodyFat", "bmi")):
+            weight_rows.append(container)
+
+    weigh_ins = raw_data.get("weigh_ins", {})
+    if isinstance(weigh_ins, dict):
+        for summary in weigh_ins.get("dailyWeightSummaries", []) or []:
+            if isinstance(summary, dict) and isinstance(summary.get("latestWeight"), dict):
+                weight_rows.append(summary["latestWeight"])
+
+    if weight_rows:
+        latest = sorted(
+            weight_rows,
+            key=lambda row: str(row.get("calendarDate") or row.get("date") or ""),
+        )[-1]
+        weight = latest.get("weight")
+        if isinstance(weight, (int, float)) and weight > 0:
+            fields["weight_kg"] = round(
+                weight / 1000 if weight > 500 else weight,
+                1,
+            )
+        body_fat = latest.get("bodyFat")
+        if isinstance(body_fat, (int, float)):
+            fields["body_fat_pct"] = round(body_fat, 1)
+        bmi = latest.get("bmi")
+        if isinstance(bmi, (int, float)):
+            fields["bmi"] = round(bmi, 1)
+
+    daily_stats = raw_data.get("daily_stats", [])
+    if isinstance(daily_stats, list):
+        valid_stats = [item for item in daily_stats if isinstance(item, dict)]
+        if valid_stats:
+            latest_stats = valid_stats[-1]
+            rhr = latest_stats.get("restingHeartRate")
+            if isinstance(rhr, (int, float)) and rhr > 0:
+                fields["resting_heart_rate"] = int(rhr)
+
+    generic_candidates: list[dict[str, Any]] = []
+    max_metrics = raw_data.get("max_metrics", {})
+    if isinstance(max_metrics, dict) and isinstance(max_metrics.get("generic"), dict):
+        generic_candidates.append(max_metrics["generic"])
+    training_status = raw_data.get("training_status", [])
+    status_items = training_status if isinstance(training_status, list) else [training_status]
+    for item in status_items:
+        if not isinstance(item, dict):
+            continue
+        recent = item.get("mostRecentVO2Max")
+        if isinstance(recent, dict) and isinstance(recent.get("generic"), dict):
+            generic_candidates.append(recent["generic"])
+    if generic_candidates:
+        generic = generic_candidates[-1]
+        vo2 = generic.get("vo2MaxPreciseValue") or generic.get("vo2MaxValue")
+        if isinstance(vo2, (int, float)) and vo2 > 0:
+            fields["vo2max"] = round(vo2, 1)
+        fitness_age = generic.get("fitnessAge")
+        if isinstance(fitness_age, (int, float)) and fitness_age > 0:
+            fields["fitness_age"] = int(fitness_age)
+
+    devices = raw_data.get("devices", [])
+    if isinstance(devices, list) and devices:
+        fields["devices"] = [
+            {
+                "name": device.get(
+                    "productDisplayName",
+                    device.get("deviceName", "unknown"),
+                ),
+                "type": device.get("deviceTypeName", ""),
+            }
+            for device in devices
+            if isinstance(device, dict)
+        ]
+
+    return fields
 
 
 def create_default_profile(path: str | Path | None = None) -> dict[str, Any]:

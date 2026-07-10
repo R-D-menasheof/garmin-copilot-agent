@@ -6,15 +6,42 @@ import json
 import logging
 from datetime import date
 
-from shared.auth import verify_api_key
+from shared.auth import resolve_identity, resolve_user, verify_api_key
 from shared.blob_store import BlobStore
+from vitalis.models import Profile
 
 logger = logging.getLogger(__name__)
 
 
-def _get_blob_store() -> BlobStore:
-    """Create BlobStore from environment (mockable in tests)."""
-    return BlobStore()
+def _load_or_create_profile(store, identity) -> Profile:
+    """Return the user's profile, creating a minimal one on first login.
+
+    The minimal profile captures the display name and email from the SSO
+    token claims and is marked ``onboarded=False`` so the app shows the
+    first-run wizard.
+    """
+    profile = store.load_profile()
+    if profile is None:
+        profile = Profile(
+            display_name=identity.name,
+            email=identity.email,
+            onboarded=False,
+        )
+        store.save_profile(profile)
+    return profile
+
+
+def _get_blob_store(req) -> BlobStore:
+    """Create a user-scoped BlobStore for the authenticated caller.
+
+    The ``user_id`` is resolved server-side from the request credentials and
+    never taken from client-supplied input, so a caller can only ever reach
+    their own ``users/{user_id}/`` data. Mockable in tests.
+    """
+    user_id = resolve_user(req)
+    if not user_id:
+        raise PermissionError("Unauthenticated request reached blob store")
+    return BlobStore(user_id=user_id)
 
 
 def _error(message: str, status_code: int = 400) -> "HttpResponse":
@@ -71,7 +98,7 @@ def get_nutrition(req) -> "HttpResponse":
     if start is None or end is None:
         return _error("Invalid date format. Use YYYY-MM-DD")
 
-    store = _get_blob_store()
+    store = _get_blob_store(req)
     meals = store.load_meals_range(start, end)
 
     return _ok({
@@ -97,7 +124,7 @@ def get_biometrics(req) -> "HttpResponse":
     if start is None or end is None:
         return _error("Invalid date format. Use YYYY-MM-DD")
 
-    store = _get_blob_store()
+    store = _get_blob_store(req)
     biometrics = store.load_biometrics_range(start, end)
 
     return _ok({
@@ -123,7 +150,7 @@ def get_combined(req) -> "HttpResponse":
     if start is None or end is None:
         return _error("Invalid date format. Use YYYY-MM-DD")
 
-    store = _get_blob_store()
+    store = _get_blob_store(req)
     combined = store.load_combined(start, end)
 
     return _ok(combined)
@@ -134,7 +161,7 @@ def get_goals(req) -> "HttpResponse":
     if not verify_api_key(req):
         return _error("Unauthorized", 401)
 
-    store = _get_blob_store()
+    store = _get_blob_store(req)
     goal = store.load_goals()
 
     if goal is None:
@@ -152,7 +179,7 @@ def get_recents(req) -> "HttpResponse":
     if limit is None:
         return _error("Invalid 'limit' query param")
 
-    store = _get_blob_store()
+    store = _get_blob_store(req)
     recents = store.load_recent_meals(limit=limit)
     return _ok({"recents": [meal.model_dump(mode="json") for meal in recents]})
 
@@ -162,7 +189,7 @@ def get_favorites(req) -> "HttpResponse":
     if not verify_api_key(req):
         return _error("Unauthorized", 401)
 
-    store = _get_blob_store()
+    store = _get_blob_store(req)
     favorites = store.load_favorites()
     return _ok({"favorites": [favorite.model_dump(mode="json") for favorite in favorites]})
 
@@ -172,7 +199,7 @@ def get_templates(req) -> "HttpResponse":
     if not verify_api_key(req):
         return _error("Unauthorized", 401)
 
-    store = _get_blob_store()
+    store = _get_blob_store(req)
     templates = store.load_templates()
     return _ok({"templates": [template.model_dump(mode="json") for template in templates]})
 
@@ -190,7 +217,7 @@ def get_plan_day(req) -> "HttpResponse":
     if day is None:
         return _error("Invalid date format. Use YYYY-MM-DD")
 
-    store = _get_blob_store()
+    store = _get_blob_store(req)
     plan = store.load_plan_day(day)
     return _ok({"plan": None if plan is None else plan.model_dump(mode="json")})
 
@@ -200,7 +227,7 @@ def get_latest_summary(req) -> "HttpResponse":
     if not verify_api_key(req):
         return _error("Unauthorized", 401)
 
-    store = _get_blob_store()
+    store = _get_blob_store(req)
     summary = store.load_latest_summary()
     return _ok({"summary": None if summary is None else summary.model_dump(mode="json")})
 
@@ -214,7 +241,7 @@ def get_summary_history(req) -> "HttpResponse":
     if limit is None:
         return _error("Invalid 'limit' query param")
 
-    store = _get_blob_store()
+    store = _get_blob_store(req)
     summaries = store.load_summary_history(limit=limit)
     return _ok({"summaries": [summary.model_dump(mode="json") for summary in summaries]})
 
@@ -224,7 +251,7 @@ def get_recommendation_statuses(req) -> "HttpResponse":
     if not verify_api_key(req):
         return _error("Unauthorized", 401)
 
-    store = _get_blob_store()
+    store = _get_blob_store(req)
     statuses = store.load_recommendation_statuses()
     return _ok({"statuses": [s.model_dump(mode="json") for s in statuses]})
 
@@ -234,7 +261,7 @@ def get_timeline(req) -> "HttpResponse":
     if not verify_api_key(req):
         return _error("Unauthorized", 401)
 
-    store = _get_blob_store()
+    store = _get_blob_store(req)
     events = store.load_timeline_events()
     return _ok({"events": [e.model_dump(mode="json") for e in events]})
 
@@ -244,7 +271,7 @@ def get_active_training(req) -> "HttpResponse":
     if not verify_api_key(req):
         return _error("Unauthorized", 401)
 
-    store = _get_blob_store()
+    store = _get_blob_store(req)
     program = store.load_active_training_program()
     return _ok({"program": None if program is None else program.model_dump(mode="json")})
 
@@ -254,7 +281,7 @@ def get_goal_programs(req) -> "HttpResponse":
     if not verify_api_key(req):
         return _error("Unauthorized", 401)
 
-    store = _get_blob_store()
+    store = _get_blob_store(req)
     programs = store.load_goal_programs()
     return _ok({"programs": [p.model_dump(mode="json") for p in programs]})
 
@@ -264,7 +291,7 @@ def get_sleep_protocol(req) -> "HttpResponse":
     if not verify_api_key(req):
         return _error("Unauthorized", 401)
 
-    store = _get_blob_store()
+    store = _get_blob_store(req)
     protocol = store.load_sleep_protocol()
     return _ok({"protocol": None if protocol is None else protocol.model_dump(mode="json")})
 
@@ -284,7 +311,7 @@ def get_sleep_entries(req) -> "HttpResponse":
     if start is None or end is None:
         return _error("Invalid date format, use YYYY-MM-DD")
 
-    store = _get_blob_store()
+    store = _get_blob_store(req)
     entries = store.load_sleep_entries(start, end)
     return _ok({"entries": [e.model_dump(mode="json") for e in entries]})
 
@@ -294,7 +321,7 @@ def get_lab_trends(req) -> "HttpResponse":
     if not verify_api_key(req):
         return _error("Unauthorized", 401)
 
-    store = _get_blob_store()
+    store = _get_blob_store(req)
     trends = store.load_lab_trends()
     return _ok({"trends": [t.model_dump(mode="json") for t in trends]})
 
@@ -304,6 +331,73 @@ def get_day_overrides(req) -> "HttpResponse":
     if not verify_api_key(req):
         return _error("Unauthorized", 401)
 
-    store = _get_blob_store()
+    store = _get_blob_store(req)
     overrides = store.load_day_overrides()
     return _ok({"overrides": [o.model_dump(mode="json") for o in overrides]})
+
+
+def get_me(req) -> "HttpResponse":
+    """GET /api/v1/me — the authenticated user's identity + onboarding state."""
+    identity = resolve_identity(req)
+    if identity is None:
+        return _error("Unauthorized", 401)
+
+    store = _get_blob_store(req)
+    profile = _load_or_create_profile(store, identity)
+
+    return _ok({
+        "user_id": identity.user_id,
+        "display_name": profile.display_name,
+        "email": profile.email,
+        "onboarded": profile.onboarded,
+    })
+
+
+def get_profile(req) -> "HttpResponse":
+    """GET /api/v1/profile — the user's full profile."""
+    identity = resolve_identity(req)
+    if identity is None:
+        return _error("Unauthorized", 401)
+
+    store = _get_blob_store(req)
+    profile = _load_or_create_profile(store, identity)
+    return _ok({"profile": profile.model_dump(mode="json")})
+
+
+def get_push_tokens(req) -> "HttpResponse":
+    """GET /api/v1/push/tokens — the user's registered device push tokens."""
+    if not verify_api_key(req):
+        return _error("Unauthorized", 401)
+
+    store = _get_blob_store(req)
+    tokens = store.load_push_tokens()
+    return _ok({"tokens": [t.model_dump(mode="json") for t in tokens]})
+
+
+def get_medical_uploads(req) -> "HttpResponse":
+    """GET /api/v1/medical/uploads — list the user's uploaded documents (metadata)."""
+    if not verify_api_key(req):
+        return _error("Unauthorized", 401)
+
+    store = _get_blob_store(req)
+    uploads = store.load_medical_uploads()
+    return _ok({"uploads": [u.model_dump(mode="json") for u in uploads]})
+
+
+def get_medical_upload_content(req) -> "HttpResponse":
+    """GET /api/v1/medical/upload/{id} — download a stored document as base64."""
+    if not verify_api_key(req):
+        return _error("Unauthorized", 401)
+
+    upload_id = req.route_params.get("id")
+    if not upload_id:
+        return _error("upload id required")
+
+    store = _get_blob_store(req)
+    content = store.load_medical_upload_content(upload_id)
+    if content is None:
+        return _error("Upload not found", 404)
+
+    import base64
+
+    return _ok({"id": upload_id, "content": base64.b64encode(content).decode()})

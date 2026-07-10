@@ -14,6 +14,8 @@ from functions.read_api import (
     get_favorites,
     get_goals,
     get_latest_summary,
+    get_me,
+    get_profile,
     get_recommendation_statuses,
     get_summary_history,
     get_nutrition,
@@ -26,10 +28,14 @@ from functions.read_api import (
     get_sleep_protocol,
     get_sleep_entries,
     get_lab_trends,
+    get_push_tokens,
+    get_medical_uploads,
+    get_medical_upload_content,
 )
 from functions.write_api import (
     delete_favorite,
     delete_template,
+    patch_profile,
     post_biometrics,
     post_day_override,
     post_favorite,
@@ -48,6 +54,9 @@ from functions.write_api import (
     post_lab_trends,
     put_meals,
     put_timeline,
+    post_push_token,
+    unregister_push_token,
+    post_medical_upload,
 )
 from functions.ingestion import analyze_image, analyze_text, lookup_barcode
 
@@ -145,6 +154,21 @@ def api_get_lab_trends(req: func.HttpRequest) -> func.HttpResponse:
 @app.route(route="v1/nutrition/day-overrides", methods=["GET"])
 def api_get_day_overrides(req: func.HttpRequest) -> func.HttpResponse:
     return get_day_overrides(req)
+
+
+@app.route(route="v1/me", methods=["GET"])
+def api_get_me(req: func.HttpRequest) -> func.HttpResponse:
+    return get_me(req)
+
+
+@app.route(route="v1/profile", methods=["GET"])
+def api_get_profile(req: func.HttpRequest) -> func.HttpResponse:
+    return get_profile(req)
+
+
+@app.route(route="v1/profile", methods=["PATCH"])
+def api_patch_profile(req: func.HttpRequest) -> func.HttpResponse:
+    return patch_profile(req)
 
 
 # ── Write API ─────────────────────────────────────────────────────
@@ -248,6 +272,42 @@ def api_post_lab_trends(req: func.HttpRequest) -> func.HttpResponse:
 @app.route(route="v1/nutrition/day-override", methods=["POST"])
 def api_post_day_override(req: func.HttpRequest) -> func.HttpResponse:
     return post_day_override(req)
+
+
+# ── Push / Notifications ────────────────────────────────
+
+
+@app.route(route="v1/push/register", methods=["POST"])
+def api_post_push_token(req: func.HttpRequest) -> func.HttpResponse:
+    return post_push_token(req)
+
+
+@app.route(route="v1/push/token", methods=["DELETE"])
+def api_unregister_push_token(req: func.HttpRequest) -> func.HttpResponse:
+    return unregister_push_token(req)
+
+
+@app.route(route="v1/push/tokens", methods=["GET"])
+def api_get_push_tokens(req: func.HttpRequest) -> func.HttpResponse:
+    return get_push_tokens(req)
+
+
+# ── Medical documents (in-app upload) ─────────────────────
+
+
+@app.route(route="v1/medical/upload", methods=["POST"])
+def api_post_medical_upload(req: func.HttpRequest) -> func.HttpResponse:
+    return post_medical_upload(req)
+
+
+@app.route(route="v1/medical/uploads", methods=["GET"])
+def api_get_medical_uploads(req: func.HttpRequest) -> func.HttpResponse:
+    return get_medical_uploads(req)
+
+
+@app.route(route="v1/medical/upload/{id}", methods=["GET"])
+def api_get_medical_upload_content(req: func.HttpRequest) -> func.HttpResponse:
+    return get_medical_upload_content(req)
 
 
 # ── Ingestion API ─────────────────────────────────────────────────

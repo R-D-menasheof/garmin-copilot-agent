@@ -16,14 +16,22 @@ from functions.read_api import (
     get_combined,
     get_day_overrides,
     get_goals,
+    get_me,
+    get_medical_upload_content,
+    get_medical_uploads,
     get_nutrition,
+    get_profile,
+    get_push_tokens,
     get_recommendation_statuses,
 )
 from vitalis.models import (
     BiometricsRecord,
     DayTrackingOverride,
     MealEntry,
+    MedicalUpload,
     NutritionSource,
+    Profile,
+    PushToken,
     RecStatus,
     RecommendationStatus,
 )
@@ -290,3 +298,173 @@ class TestGetDayOverrides:
         req = _make_request({}, headers={})
         resp = get_day_overrides(req)
         assert resp.status_code == 401
+
+
+# ── User-scoped store ─────────────────────────────────────────────
+
+
+class TestUserScopedStore:
+    @patch("functions.read_api.BlobStore")
+    @patch("functions.read_api.resolve_user", return_value="alice")
+    def test_scopes_store_to_resolved_user(self, mock_resolve, mock_bs) -> None:
+        from functions.read_api import _get_blob_store
+        _get_blob_store(MagicMock())
+        mock_bs.assert_called_once_with(user_id="alice")
+
+    @patch("functions.read_api.resolve_user", return_value=None)
+    def test_raises_when_unauthenticated(self, mock_resolve) -> None:
+        from functions.read_api import _get_blob_store
+        with pytest.raises(PermissionError):
+            _get_blob_store(MagicMock())
+
+
+# ── Me / Profile ──────────────────────────────────────────────────
+
+
+def _identity(user_id: str = "u1", name: str = "Dana", email: str = "d@x.com"):
+    from shared.auth import Identity
+    return Identity(user_id=user_id, name=name, email=email)
+
+
+class TestGetMe:
+    @patch("functions.read_api._get_blob_store")
+    @patch("functions.read_api.resolve_identity")
+    def test_returns_identity_and_onboarded(self, mock_ident, mock_store_fn) -> None:
+        mock_ident.return_value = _identity()
+        store = MagicMock()
+        store.load_profile.return_value = Profile(
+            display_name="Dana", email="d@x.com", onboarded=True,
+        )
+        mock_store_fn.return_value = store
+
+        resp = get_me(_make_request({}))
+
+        assert resp.status_code == 200
+        body = json.loads(resp.get_body())
+        assert body["user_id"] == "u1"
+        assert body["display_name"] == "Dana"
+        assert body["onboarded"] is True
+
+    @patch("functions.read_api._get_blob_store")
+    @patch("functions.read_api.resolve_identity")
+    def test_first_login_creates_minimal_profile(self, mock_ident, mock_store_fn) -> None:
+        mock_ident.return_value = _identity()
+        store = MagicMock()
+        store.load_profile.return_value = None
+        mock_store_fn.return_value = store
+
+        resp = get_me(_make_request({}))
+
+        assert resp.status_code == 200
+        body = json.loads(resp.get_body())
+        assert body["onboarded"] is False
+        assert body["display_name"] == "Dana"
+        store.save_profile.assert_called_once()
+
+    @patch("functions.read_api.resolve_identity", return_value=None)
+    def test_unauthorized(self, _ident) -> None:
+        resp = get_me(_make_request({}, headers={}))
+        assert resp.status_code == 401
+
+
+class TestGetProfile:
+    @patch("functions.read_api._get_blob_store")
+    @patch("functions.read_api.resolve_identity")
+    def test_returns_full_profile(self, mock_ident, mock_store_fn) -> None:
+        mock_ident.return_value = _identity()
+        store = MagicMock()
+        store.load_profile.return_value = Profile(
+            display_name="Dana", height_cm=165, goals=["ירידה במשקל"],
+        )
+        mock_store_fn.return_value = store
+
+        resp = get_profile(_make_request({}))
+
+        assert resp.status_code == 200
+        body = json.loads(resp.get_body())
+        assert body["profile"]["display_name"] == "Dana"
+        assert body["profile"]["height_cm"] == 165
+        assert body["profile"]["goals"] == ["ירידה במשקל"]
+
+    @patch("functions.read_api.resolve_identity", return_value=None)
+    def test_unauthorized(self, _ident) -> None:
+        resp = get_profile(_make_request({}, headers={}))
+        assert resp.status_code == 401
+
+
+class TestGetPushTokens:
+    @patch("functions.read_api._get_blob_store")
+    @patch("functions.read_api.verify_api_key", return_value=True)
+    def test_returns_tokens(self, _auth, mock_store_fn) -> None:
+        store = MagicMock()
+        store.load_push_tokens.return_value = [
+            PushToken(token="fcm-abc", platform="android"),
+        ]
+        mock_store_fn.return_value = store
+
+        resp = get_push_tokens(_make_request({}))
+
+        assert resp.status_code == 200
+        body = json.loads(resp.get_body())
+        assert body["tokens"][0]["token"] == "fcm-abc"
+
+    @patch("functions.read_api.verify_api_key", return_value=False)
+    def test_unauthorized(self, _auth) -> None:
+        resp = get_push_tokens(_make_request({}, headers={}))
+        assert resp.status_code == 401
+
+
+class TestGetMedicalUploads:
+    @patch("functions.read_api._get_blob_store")
+    @patch("functions.read_api.verify_api_key", return_value=True)
+    def test_returns_uploads(self, _auth, mock_store_fn) -> None:
+        store = MagicMock()
+        store.load_medical_uploads.return_value = [
+            MedicalUpload(
+                id="u1", filename="labs.pdf",
+                content_type="application/pdf", size_bytes=3,
+            ),
+        ]
+        mock_store_fn.return_value = store
+
+        resp = get_medical_uploads(_make_request({}))
+
+        assert resp.status_code == 200
+        body = json.loads(resp.get_body())
+        assert body["uploads"][0]["filename"] == "labs.pdf"
+
+    @patch("functions.read_api.verify_api_key", return_value=False)
+    def test_unauthorized(self, _auth) -> None:
+        resp = get_medical_uploads(_make_request({}, headers={}))
+        assert resp.status_code == 401
+
+
+class TestGetMedicalUploadContent:
+    @patch("functions.read_api._get_blob_store")
+    @patch("functions.read_api.verify_api_key", return_value=True)
+    def test_returns_base64(self, _auth, mock_store_fn) -> None:
+        store = MagicMock()
+        store.load_medical_upload_content.return_value = b"%PDF-1.4"
+        mock_store_fn.return_value = store
+        req = _make_request({})
+        req.route_params = {"id": "u1"}
+
+        resp = get_medical_upload_content(req)
+
+        assert resp.status_code == 200
+        import base64
+        body = json.loads(resp.get_body())
+        assert base64.b64decode(body["content"]) == b"%PDF-1.4"
+
+    @patch("functions.read_api._get_blob_store")
+    @patch("functions.read_api.verify_api_key", return_value=True)
+    def test_404_when_missing(self, _auth, mock_store_fn) -> None:
+        store = MagicMock()
+        store.load_medical_upload_content.return_value = None
+        mock_store_fn.return_value = store
+        req = _make_request({})
+        req.route_params = {"id": "nope"}
+
+        resp = get_medical_upload_content(req)
+
+        assert resp.status_code == 404
