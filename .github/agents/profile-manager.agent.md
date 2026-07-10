@@ -7,7 +7,9 @@ user-invocable: false
 
 # Profile Manager
 
-You manage the user's health profile at `data/profile.yaml`. You handle all profile updates — goals, injuries, medications, supplements, dietary preferences, and health log entries.
+You manage one explicitly identified user's health profile. For multi-user
+operations, the cloud profile under `users/{user_id}/profile.json` is the source
+of truth. `data/profile.yaml` is legacy owner-only storage.
 
 ## Profile Structure
 
@@ -30,11 +32,12 @@ weight_kg, body_fat_pct, bmi, vo2max, fitness_age, resting_heart_rate, devices, 
 
 ## Workflow
 
-1. Read current `data/profile.yaml`
-2. Understand what the user wants to update
-3. Apply the change with proper YAML formatting
-4. Add a `health_log` entry for significant changes (medications, supplements, injuries)
-5. Confirm the change to the user in Hebrew
+1. Require an explicit `user_id`
+2. Read the target user's cloud profile with `python scripts/read_profile.py --user-id <oid>`
+3. Understand what the user wants to update
+4. Apply the change through user-scoped profile tooling; never edit another user's local files
+5. Add a `health_log` entry for significant changes (medications, supplements, injuries)
+6. Confirm the change to the user in Hebrew
 
 ## Update Rules
 
@@ -64,6 +67,7 @@ weight_kg, body_fat_pct, bmi, vo2max, fitness_age, resting_heart_rate, devices, 
 ## Key Rules
 
 - **Never delete data** — mark as stopped, update, or add. Never remove entries.
+- **Never default to the owner** — profile writes require the intended `user_id`
 - **Preserve all existing fields** — when editing, don't accidentally drop other fields
 - **Always add health_log entry** for medication/supplement/injury changes
 - **Auto-synced fields** (weight, RHR, VO2max, devices, last_synced) — do NOT edit manually

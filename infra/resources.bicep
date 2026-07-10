@@ -29,6 +29,19 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
 resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' = {
   parent: storage
   name: 'default'
+  properties: {
+    // Data-safety hardening: protect health data against accidental
+    // overwrite (versioning) and deletion (soft-delete, 30-day recovery).
+    isVersioningEnabled: true
+    deleteRetentionPolicy: {
+      enabled: true
+      days: 30
+    }
+    containerDeleteRetentionPolicy: {
+      enabled: true
+      days: 30
+    }
+  }
 }
 
 resource container 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
@@ -39,6 +52,57 @@ resource container 'Microsoft.Storage/storageAccounts/blobServices/containers@20
   }
 }
 
+// Lifecycle: delete noncurrent blob versions after 90 days to bound
+// storage cost while keeping a 90-day recovery window.
+resource storageLifecycle 'Microsoft.Storage/storageAccounts/managementPolicies@2023-05-01' = {
+  parent: storage
+  name: 'default'
+  properties: {
+    policy: {
+      rules: [
+        {
+          enabled: true
+          name: 'cleanup-old-versions'
+          type: 'Lifecycle'
+          definition: {
+            filters: {
+              blobTypes: [ 'blockBlob' ]
+            }
+            actions: {
+              version: {
+                delete: {
+                  daysAfterCreationGreaterThan: 90
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+// ── Observability (Log Analytics + Application Insights) ───────────
+
+resource logWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
+  name: 'log-${baseName}'
+  location: location
+  properties: {
+    sku: {
+      name: 'PerGB2018'
+    }
+    retentionInDays: 30
+  }
+}
+
+resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
+  name: 'appi-${baseName}'
+  location: location
+  kind: 'web'
+  properties: {
+    Application_Type: 'web'
+    WorkspaceResourceId: logWorkspace.id
+  }
+}
 // ── App Service Plan (Consumption) ────────────────────────────────
 
 resource plan 'Microsoft.Web/serverfarms@2023-12-01' = {
@@ -66,6 +130,11 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
     siteConfig: {
       pythonVersion: '3.11'
       linuxFxVersion: 'PYTHON|3.11'
+      // NOTE: some runtime settings are managed live and are NOT in this
+      // template: VITALIS_OWNER_USER_ID, AUTH_ISSUER / AUTH_JWKS_URL /
+      // AUTH_AUDIENCE, FCM_PROJECT_ID / FCM_SERVICE_ACCOUNT_JSON. A full
+      // redeploy of this Bicep replaces the appSettings array and will
+      // STRIP them — reconcile via Key Vault before running a full deploy.
       appSettings: [
         {
           name: 'AzureWebJobsStorage'
@@ -102,6 +171,10 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
         {
           name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
           value: 'true'
+        }
+        {
+          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+          value: appInsights.properties.ConnectionString
         }
       ]
     }
@@ -145,3 +218,4 @@ output functionAppName string = functionApp.name
 output storageAccountName string = storage.name
 output openaiEndpoint string = openai.properties.endpoint
 output functionAppUrl string = 'https://${functionApp.properties.defaultHostName}/api'
+output appInsightsName string = appInsights.name

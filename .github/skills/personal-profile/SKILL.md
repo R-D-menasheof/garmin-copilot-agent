@@ -7,7 +7,9 @@ description: "User profile fields, YAML structure, how to use for personalisatio
 
 ## Overview
 
-The user profile at `data/profile.yaml` contains both manually entered fields and auto-synced Garmin data. It is the foundation for personalised analysis.
+For multi-user analysis, the cloud profile under `users/{user_id}/profile.json`
+is the source of truth and must be loaded with an explicit `user_id`.
+`data/profile.yaml` remains the legacy owner profile.
 
 ## Fields
 
@@ -41,12 +43,12 @@ The user profile at `data/profile.yaml` contains both manually entered fields an
 
 ## How the Agent Should Use the Profile
 
-1. **Always read before analysis** — know the user's context
+1. **Always read before analysis** — use `scripts/read_profile.py --user-id <oid>`
 2. **Tailor recommendations to goals** — weight loss goals → different advice than performance goals
 3. **Account for injuries** — don't suggest activities that aggravate them
 4. **Use auto-synced metrics for trend awareness** — these are updated every sync
 5. **Respect dietary preferences** — don't suggest foods/supplements that conflict
-6. **Never modify the profile directly** — only `scripts/sync.py` updates auto-synced fields; for manual fields, ask the user to edit or update it for them after confirmation
+6. **Never modify the wrong profile** — all cloud reads and writes require the explicit target `user_id`
 
 ## Interactive Profile Completion — Phase 3 of Analysis
 

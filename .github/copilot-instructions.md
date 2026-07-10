@@ -95,6 +95,15 @@ Each data concern has **exactly one owning module**. Never duplicate logic.
 | Goals read CLI           | `scripts/read_goals.py`                 | Agent reads goal programs + milestones                      |
 | Sleep read CLI           | `scripts/read_sleep.py`                 | Agent reads sleep checklist entries                         |
 
+### Multi-User Weekly Reviews
+
+- Require an explicit Entra `user_id`; never infer or default to the owner.
+- Build one immutable packet with `scripts/prepare_weekly_review.py --user-id <oid>`.
+- All specialist agents consume that packet rather than reading owner-global files.
+- Write reports to `data/users/<user-id>/reports/YYYY-MM-DD.md`.
+- Publish with `scripts/publish_summary.py --user-id <oid> --date YYYY-MM-DD`.
+- Identical repeated publishes are idempotent and must not send a second push.
+
 ### 4. Agent Memory Protocol
 
 Vitalis builds health records over time using a summary-based memory system:

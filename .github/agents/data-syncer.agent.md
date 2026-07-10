@@ -11,6 +11,27 @@ You handle all data synchronization for Vitalis — fetching Garmin Connect data
 
 ## Garmin Sync Workflow
 
+For a multi-user review, require the user's explicit Entra `user_id` and run
+the direct, isolated Garmin path:
+
+```powershell
+python scripts/sync.py --user-id <oid> --days N --non-interactive
+```
+
+This stores raw data under `data/users/<oid>/synced/`, OAuth tokens under
+`data/users/<oid>/.garmin_tokens/`, and merges daily metrics into that user's
+cloud biometrics. It must never use the owner's `.env`, credentials or tokens.
+Scheduled runs must fail fast when tokens are missing, invalid, or require MFA;
+they must never prompt. Perform the first login or token refresh separately in
+an interactive run without `--non-interactive`.
+
+After sync, build `scripts/prepare_weekly_review.py --user-id <oid>` and verify
+`data_quality.biometric_days` plus `sync_freshness`. Garmin-only fields include Body Battery, Stress,
+Training Readiness and activity types when the device supports them. Missing
+fields on older devices such as Venu Sq are expected and must not be invented.
+
+Use the legacy local workflow below only for the explicitly identified owner.
+
 1. Read `data/profile.yaml` → check `last_synced` date
 2. Calculate days since last sync
 3. Run: `backend/.venv/Scripts/python.exe scripts/sync.py --days N` (where N covers the gap, max 90)
@@ -60,6 +81,7 @@ When Garmin blocks programmatic login:
 backend/.venv/Scripts/python.exe scripts/sync.py --today
 backend/.venv/Scripts/python.exe scripts/sync.py --days 7
 backend/.venv/Scripts/python.exe scripts/sync.py --from 2026-03-01 --to 2026-03-13
+backend/.venv/Scripts/python.exe scripts/sync.py --user-id <oid> --days 7
 
 # Medical import
 backend/.venv/Scripts/python.exe scripts/import_medical.py --file doc.pdf --category blood_tests --date 2026-03-01 --title "בדיקת דם"
@@ -68,6 +90,8 @@ backend/.venv/Scripts/python.exe scripts/import_medical.py --rebuild-index
 
 ## Key Rules
 
+- Require an explicit `user_id` before any multi-user operation
+- Never reuse owner Garmin credentials or token files for another user
 - **Never sync more than 90 days** at once — Garmin rate limits
 - **Always verify** sync succeeded before reporting success
 - If sync fails, suggest: retry, check internet, or try a shorter date range
