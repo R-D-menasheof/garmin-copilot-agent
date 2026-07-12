@@ -8,6 +8,7 @@ import pytest
 
 from vitalis.profile import (
     create_default_profile,
+    extract_garmin_profile_fields,
     load_profile,
     save_profile,
     update_from_garmin,
@@ -78,6 +79,53 @@ class TestProfile:
         updated = update_from_garmin(raw, path)
         assert updated["vo2max"] == 48.3
         assert updated["fitness_age"] == 28
+
+    def test_extract_profile_fields_supports_real_nested_garmin_shapes(self):
+        raw = {
+            "body_composition": [
+                {
+                    "dateWeightList": [
+                        {
+                            "calendarDate": "2026-07-10",
+                            "weight": 104000,
+                            "bodyFat": 38.2,
+                            "bmi": 36.0,
+                        }
+                    ]
+                }
+            ],
+            "daily_stats": [
+                {"calendarDate": "2026-07-10", "restingHeartRate": 68}
+            ],
+            "training_status": [
+                {
+                    "mostRecentVO2Max": {
+                        "generic": {
+                            "vo2MaxPreciseValue": 31.5,
+                            "fitnessAge": 62,
+                        }
+                    }
+                }
+            ],
+            "devices": [
+                {
+                    "productDisplayName": "Venu Sq",
+                    "deviceTypeName": "FITNESS_WATCH",
+                }
+            ],
+        }
+
+        fields = extract_garmin_profile_fields(raw)
+
+        assert fields["weight_kg"] == 104.0
+        assert fields["body_fat_pct"] == 38.2
+        assert fields["bmi"] == 36.0
+        assert fields["resting_heart_rate"] == 68
+        assert fields["vo2max"] == 31.5
+        assert fields["fitness_age"] == 62
+        assert fields["devices"] == [
+            {"name": "Venu Sq", "type": "FITNESS_WATCH"}
+        ]
 
     def test_update_preserves_manual_fields(self, tmp_path):
         path = tmp_path / "profile.yaml"

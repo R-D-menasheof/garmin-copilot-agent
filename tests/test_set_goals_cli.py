@@ -15,7 +15,7 @@ import pytest
 _project_root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_project_root / "scripts"))
 
-from set_goals import parse_args, send_goals
+from set_goals import parse_args, send_goals, save_goals_direct
 
 
 class TestParseArgs:
@@ -70,3 +70,25 @@ class TestSendGoals:
                 api_url="http://localhost:7071/api",
                 api_key="test-key",
             )
+
+
+class TestSaveGoalsDirect:
+    def test_parses_user_id(self) -> None:
+        args = parse_args([
+            "--calories", "2200", "--protein", "180",
+            "--carbs", "250", "--fat", "70", "--user-id", "u-123",
+        ])
+        assert args.user_id == "u-123"
+
+    def test_saves_to_user_store(self) -> None:
+        blob = MagicMock()
+
+        result = save_goals_direct("u-123", 2200, 180.0, 250.0, 70.0, store=blob)
+
+        assert result["status"] == "ok"
+        assert result["user_id"] == "u-123"
+        blob.save_goals.assert_called_once()
+        goal = blob.save_goals.call_args.args[0]
+        assert goal.calories_target == 2200
+        assert goal.protein_g_target == 180.0
+        assert goal.set_by == "agent"

@@ -207,6 +207,13 @@ class TestBiometricsRecord:
         assert rec.sleep_seconds is None
         assert rec.weight_kg is None
         assert rec.body_fat_pct is None
+        assert rec.vo2max is None
+
+    def test_vo2max_roundtrip(self) -> None:
+        rec = BiometricsRecord(date=date(2026, 4, 4), vo2max=42.5)
+        assert rec.vo2max == 42.5
+        restored = BiometricsRecord.model_validate(rec.model_dump(mode="json"))
+        assert restored.vo2max == 42.5
 
 
 # ── KnownFood ────────────────────────────────────────────────────

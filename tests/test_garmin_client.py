@@ -46,10 +46,10 @@ class _FakeGarmin:
 
     def _connectapi(self, path: str) -> dict:
         self.connectapi_calls.append(path)
-        if "profile" in path:
-            return {"displayName": "TestUser", "fullName": "Test User"}
         if "user-settings" in path:
             return {"userData": {"measurementSystem": "METRIC"}}
+        if "profile" in path:
+            return {"displayName": "TestUser", "fullName": "Test User"}
         return {}
 
     def login(self, tokenstore: str | None = None):
@@ -101,9 +101,25 @@ class _FakeGarminMFA(_FakeGarmin):
         return ("needs_mfa", None)
 
 
+class _FakeGarminCredentialNeedsProfileLoad(_FakeGarmin):
+    """Credential login succeeds but leaves profile hydration to our wrapper."""
+
+    def login(self, tokenstore: str | None = None):
+        args: tuple[str, ...] = ()
+        if self._email is not None and self._password is not None:
+            args = (self._email, self._password)
+        self.login_calls.append((args, tokenstore))
+        return (None, None)
+
+
 @pytest.fixture(autouse=True)
 def _reset_fake_state():
-    for cls in (_FakeGarmin, _FakeGarminTokenSuccess, _FakeGarminMFA):
+    for cls in (
+        _FakeGarmin,
+        _FakeGarminTokenSuccess,
+        _FakeGarminMFA,
+        _FakeGarminCredentialNeedsProfileLoad,
+    ):
         cls.login_calls = []
         cls.dump_calls = []
         cls.resume_login_calls = []
@@ -142,6 +158,27 @@ def test_connect_raises_when_credentials_missing(monkeypatch: pytest.MonkeyPatch
 
     with pytest.raises(ValueError, match="Garmin credentials not configured"):
         client.connect()
+
+
+def test_user_scoped_client_does_not_fall_back_to_owner_environment(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    """Per-user sync must never silently authenticate as the owner."""
+    tokenstore = tmp_path / "garmin_tokens"
+    monkeypatch.setenv("GARMIN_EMAIL", "owner@example.com")
+    monkeypatch.setenv("GARMIN_PASSWORD", "owner-password")
+    monkeypatch.setattr(client_module, "Garmin", _FakeGarmin)
+
+    client = GarminClient(
+        tokenstore=str(tokenstore),
+        use_env_credentials=False,
+    )
+
+    with pytest.raises(ValueError, match="Garmin credentials not configured"):
+        client.connect()
+
+    assert _FakeGarmin.login_calls == []
 
 
 def test_connect_mfa_raises_with_session_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
@@ -210,6 +247,31 @@ def test_connect_loads_profile_after_credential_login(monkeypatch: pytest.Monkey
 
     # The Garmin instance should have display_name set (not None)
     assert client.api.display_name is not None
+
+
+def test_connect_hydrates_profile_when_library_skips_it(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    """First-run fetches must not call Garmin endpoints with display_name=None."""
+    tokenstore = tmp_path / "garmin_tokens"
+    monkeypatch.setattr(
+        client_module,
+        "Garmin",
+        _FakeGarminCredentialNeedsProfileLoad,
+    )
+
+    client = GarminClient(
+        email="user@example.com",
+        password="pw",
+        tokenstore=str(tokenstore),
+    )
+    client.connect()
+
+    assert client.api.display_name == "TestUser"
+    assert client.api.full_name == "Test User"
+    assert client.api.unit_system == "METRIC"
+    assert any("userprofile/profile" in path for path in client.api.connectapi_calls)
 
 
 def test_token_login_redumps_tokens(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):

@@ -17,7 +17,7 @@ import pytest
 _project_root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_project_root / "scripts"))
 
-from read_nutrition import parse_args, resolve_dates, fetch_combined
+from read_nutrition import parse_args, resolve_dates, fetch_combined, read_combined_direct
 
 
 class TestParseArgs:
@@ -70,3 +70,21 @@ class TestFetchCombined:
                 api_url="http://localhost:7071/api",
                 api_key="test-key",
             )
+
+
+class TestReadCombinedDirect:
+    def test_parses_user_id(self) -> None:
+        args = parse_args(["--user-id", "u-123"])
+        assert args.user_id == "u-123"
+
+    def test_reads_from_user_store(self) -> None:
+        blob = MagicMock()
+        payload = {"nutrition": {}, "biometrics": {}}
+        blob.load_combined.return_value = payload
+
+        result = read_combined_direct(
+            "u-123", date(2026, 4, 1), date(2026, 4, 4), store=blob
+        )
+
+        assert result == payload
+        blob.load_combined.assert_called_once_with(date(2026, 4, 1), date(2026, 4, 4))
