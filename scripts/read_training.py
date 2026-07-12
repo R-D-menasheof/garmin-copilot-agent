@@ -9,6 +9,7 @@ training compliance and update the program.
 
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 import os
@@ -41,10 +42,42 @@ def fetch_training(
     return resp.json().get("program")
 
 
-def main() -> int:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse CLI arguments."""
+    p = argparse.ArgumentParser(
+        description="Read active training program from the Vitalis API.",
+    )
+    p.add_argument(
+        "--user-id",
+        help=(
+            "Owner op: read directly from this user's cloud storage "
+            "(BlobStore, bypasses the HTTP API). Requires "
+            "AZURE_STORAGE_CONNECTION_STRING."
+        ),
+    )
+    return p.parse_args(argv)
+
+
+def read_training_direct(user_id: str, store=None) -> dict | None:
+    """Read the active training program directly from a user's cloud store."""
+    if store is None:
+        from _users import get_store  # lazy: pulls in api/ + azure only when used
+
+        store = get_store(user_id)
+    program = store.load_active_training_program()
+    return program.model_dump(mode="json") if program is not None else None
+
+
+def main(argv: list[str] | None = None) -> int:
     """CLI entry point."""
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    args = parse_args(argv)
     try:
-        program = fetch_training()
+        if args.user_id:
+            program = read_training_direct(args.user_id)
+        else:
+            program = fetch_training()
         sys.stdout.write(json.dumps(program, indent=2, ensure_ascii=False) + "\n")
         return 0
     except Exception as exc:

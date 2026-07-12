@@ -89,6 +89,9 @@ data/profile.yaml.broken-*
 
 # One-off / personal helper scripts (underscore-prefixed convention)
 scripts/_*.py
+# ...except _users.py: shared multi-user infra (no secrets — reads the storage
+# connection string from the environment). Many scripts/tests import it.
+!scripts/_users.py
 
 # Local artifacts
 %TEMP%/

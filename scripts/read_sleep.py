@@ -32,6 +32,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Read sleep entries from the Vitalis API.")
     p.add_argument("--from", dest="start", type=date.fromisoformat, help="Start date (YYYY-MM-DD)")
     p.add_argument("--to", dest="end", type=date.fromisoformat, help="End date (YYYY-MM-DD)")
+    p.add_argument(
+        "--user-id",
+        help=(
+            "Owner op: read directly from this user's cloud storage "
+            "(BlobStore, bypasses the HTTP API). Requires "
+            "AZURE_STORAGE_CONNECTION_STRING."
+        ),
+    )
     return p.parse_args(argv)
 
 
@@ -55,15 +63,29 @@ def fetch_sleep(
     return resp.json().get("entries", [])
 
 
+def read_sleep_direct(user_id: str, start: date, end: date, store=None) -> list[dict]:
+    """Read sleep entries directly from a user's cloud store (owner op)."""
+    if store is None:
+        from _users import get_store  # lazy: pulls in api/ + azure only when used
+
+        store = get_store(user_id)
+    return [entry.model_dump(mode="json") for entry in store.load_sleep_entries(start, end)]
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point."""
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     args = parse_args(argv)
     today = date.today()
     start = args.start or (today - timedelta(days=7))
     end = args.end or today
 
     try:
-        entries = fetch_sleep(start, end)
+        if args.user_id:
+            entries = read_sleep_direct(args.user_id, start, end)
+        else:
+            entries = fetch_sleep(start, end)
         sys.stdout.write(json.dumps(entries, indent=2, ensure_ascii=False) + "\n")
         return 0
     except Exception as exc:

@@ -23,6 +23,8 @@ sys.path.insert(0, str(_project_root / "src"))
 
 import httpx  # noqa: E402
 
+from vitalis.models import NutritionGoal  # noqa: E402
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-8s  %(message)s",
@@ -59,6 +61,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         "--rest-carbs", type=float, default=None,
         help="Rest-day carbs target (grams). Optional.",
+    )
+    p.add_argument(
+        "--user-id",
+        help=(
+            "Owner op: write goals directly to this user's cloud storage "
+            "(BlobStore, bypasses the HTTP API). Requires "
+            "AZURE_STORAGE_CONNECTION_STRING."
+        ),
     )
     return p.parse_args(argv)
 
@@ -120,6 +130,52 @@ def send_goals(
     return resp.json()
 
 
+def save_goals_direct(
+    user_id: str,
+    calories: int,
+    protein: float,
+    carbs: float,
+    fat: float,
+    rest_calories: int | None = None,
+    rest_carbs: float | None = None,
+    store=None,
+) -> dict:
+    """Write nutrition goals directly to a user's cloud storage (owner op).
+
+    Bypasses the HTTP API and writes straight to ``BlobStore(user_id=...)``
+    using the owner's master storage key.
+
+    Args:
+        user_id: Target user's id (Entra oid).
+        calories: Daily calorie target (training days).
+        protein: Daily protein target (grams).
+        carbs: Daily carbs target (grams, training days).
+        fat: Daily fat target (grams).
+        rest_calories: Rest-day calorie target. Optional.
+        rest_carbs: Rest-day carbs target (grams). Optional.
+        store: Optional pre-built store (for tests). Falls back to get_store.
+
+    Returns:
+        Status dict with the target user_id and stored goal.
+    """
+    goal = NutritionGoal(
+        date=date.today(),
+        calories_target=calories,
+        protein_g_target=protein,
+        carbs_g_target=carbs,
+        fat_g_target=fat,
+        rest_calories_target=rest_calories,
+        rest_carbs_g_target=rest_carbs,
+        set_by="agent",
+    )
+    if store is None:
+        from _users import get_store  # lazy: pulls in api/ + azure only when used
+
+        store = get_store(user_id)
+    store.save_goals(goal)
+    return {"status": "ok", "user_id": user_id, "goal": goal.model_dump(mode="json")}
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point."""
     args = parse_args(argv)
@@ -133,11 +189,19 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     try:
-        result = send_goals(
-            args.calories, args.protein, args.carbs, args.fat,
-            rest_calories=args.rest_calories,
-            rest_carbs=args.rest_carbs,
-        )
+        if args.user_id:
+            result = save_goals_direct(
+                args.user_id,
+                args.calories, args.protein, args.carbs, args.fat,
+                rest_calories=args.rest_calories,
+                rest_carbs=args.rest_carbs,
+            )
+        else:
+            result = send_goals(
+                args.calories, args.protein, args.carbs, args.fat,
+                rest_calories=args.rest_calories,
+                rest_carbs=args.rest_carbs,
+            )
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0
     except Exception as e:

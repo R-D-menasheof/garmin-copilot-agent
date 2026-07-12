@@ -49,6 +49,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=date.fromisoformat,
         help="End date (YYYY-MM-DD). Defaults to today.",
     )
+    p.add_argument(
+        "--user-id",
+        help=(
+            "Owner op: read directly from this user's cloud storage "
+            "(BlobStore, bypasses the HTTP API). Requires "
+            "AZURE_STORAGE_CONNECTION_STRING."
+        ),
+    )
     return p.parse_args(argv)
 
 
@@ -96,15 +104,47 @@ def fetch_combined(
     return resp.json()
 
 
+def read_combined_direct(
+    user_id: str,
+    start: date,
+    end: date,
+    store=None,
+) -> dict:
+    """Read combined nutrition + biometrics directly from a user's cloud store.
+
+    Owner op: bypasses the HTTP API and reads straight from
+    ``BlobStore(user_id=...)`` using the owner's master storage key.
+
+    Args:
+        user_id: Target user's id (Entra oid).
+        start: Start date (inclusive).
+        end: End date (inclusive).
+        store: Optional pre-built store (for tests). Falls back to get_store.
+
+    Returns:
+        ``{"nutrition": {...}, "biometrics": {...}}`` for the range.
+    """
+    if store is None:
+        from _users import get_store  # lazy: pulls in api/ + azure only when used
+
+        store = get_store(user_id)
+    return store.load_combined(start, end)
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point."""
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")  # Hebrew output safe when captured
     args = parse_args(argv)
     start, end = resolve_dates(args)
 
     logger.info("Reading combined data: %s → %s", start, end)
 
     try:
-        data = fetch_combined(start, end)
+        if args.user_id:
+            data = read_combined_direct(args.user_id, start, end)
+        else:
+            data = fetch_combined(start, end)
         print(json.dumps(data, indent=2, ensure_ascii=False))
         return 0
     except Exception as e:

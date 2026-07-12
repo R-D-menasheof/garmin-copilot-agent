@@ -114,6 +114,10 @@ class BiometricsRecord(BaseModel):
     distance_meters: Optional[float] = None
     exercise_minutes: Optional[int] = None
     intensity_minutes: Optional[int] = None
+    moderate_intensity_minutes: Optional[int] = None
+    vigorous_intensity_minutes: Optional[int] = None
+    activity_count: Optional[int] = None
+    activity_types: list[str] = Field(default_factory=list)
 
     # Sleep
     sleep_seconds: Optional[int] = None
@@ -132,8 +136,20 @@ class BiometricsRecord(BaseModel):
     # Fitness
     vo2max: Optional[float] = None
 
+    # Recovery / stress (Garmin-specific)
+    body_battery_high: Optional[int] = None
+    body_battery_low: Optional[int] = None
+    body_battery_at_wake: Optional[int] = None
+    stress_avg: Optional[int] = None
+    stress_max: Optional[int] = None
+    training_readiness: Optional[int] = None
+
     # Hydration
     water_ml: Optional[float] = None
+
+    # Provenance — which pipeline produced this record, e.g. "garmin_direct",
+    # "health_connect", or a merge like "garmin_direct+health_connect".
+    source: Optional[str] = None
 
 
 class KnownFood(BaseModel):
@@ -261,6 +277,14 @@ class HealthRecommendation(BaseModel):
 class AnalysisSummary(BaseModel):
     """Output of an analysis run — stored in data/summaries/."""
 
+    target_user_id: str | None = Field(
+        default=None,
+        description="Explicit target user for cross-user publication safety",
+    )
+    context_sha256: str | None = Field(
+        default=None,
+        description="SHA-256 of the immutable user context packet used for analysis",
+    )
     date: DateValue
     period_start: DateValue
     period_end: DateValue
