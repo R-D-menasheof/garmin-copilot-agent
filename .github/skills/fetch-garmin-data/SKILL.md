@@ -23,9 +23,9 @@ python scripts/sync.py --from 2026-01-01 --to 2026-01-31  # Date range
 On first run, Garmin may require MFA — the script will prompt you
 to enter the verification code sent to your email.
 
-### Authentication Flow (garminconnect 0.3.3 / May 2026)
+### Authentication Flow (garminconnect 0.3.6 / June 2026)
 
-`garminconnect` 0.3.3 ships its own login client (no longer uses `garth.Client` for SSO) with a 5-strategy cascading chain that automatically falls through on 429:
+`garminconnect` 0.3.6 ships its own login client with a 5-strategy cascading chain that automatically falls through on 429:
 
 1. `mobile+cffi` — iOS app flow with curl_cffi TLS fingerprint rotation
 2. `mobile+requests` — iOS app flow with plain requests
@@ -37,12 +37,12 @@ to enter the verification code sent to your email.
 
 ### Token Cache
 
-After a successful MFA login, tokens are saved to `data/.garmin_tokens/garmin_tokens.json` (single file, garminconnect 0.3.3 format). Subsequent `sync.py` runs use the cached tokens — no MFA, no 429 cascade. Tokens auto-refresh via DI refresh token; no manual rotation needed.
+After a successful MFA login, tokens are saved to `data/.garmin_tokens/garmin_tokens.json`. Subsequent `sync.py` runs use the cached tokens — no MFA, no 429 cascade. Tokens auto-refresh via the DI refresh token. Version 0.3.6 validates restored tokens and supports email-code MFA; version 0.3.5 also hardened token-file permissions. Vitalis preserves the tokenstore on every login failure so a transient outage cannot delete a user's connection.
 
 If `sync.py` keeps re-prompting for MFA on every run, check that:
 - `data/.garmin_tokens/garmin_tokens.json` exists and has size > 0 after the previous run
 - The token store directory isn't being wiped between runs (e.g. by OneDrive sync conflicts)
-- `garminconnect >= 0.3.3` and `garth >= 0.8.0` are installed (older versions used a different on-disk format and our client looks for both)
+- Python 3.12+ and `garminconnect == 0.3.6` are installed
 
 ### What to do if MFA fails or the chain rate-limits
 
@@ -82,7 +82,7 @@ If `sync.py` keeps re-prompting for MFA on every run, check that:
 | `activities`        | `get_activities_by_date(start, end)` | All activities in range |
 | `weigh_ins`         | `get_weigh_ins(start, end)`          | Weight measurements     |
 | `daily_steps_range` | `get_daily_steps(start, end)`        | Daily step totals       |
-| `daily_sleep_range` | `get_daily_sleep(start, end)`        | Daily sleep totals      |
+| `body_battery`      | `get_body_battery(start, end)`        | Body Battery by day     |
 
 ### Snapshot Data (fetched once per sync)
 
@@ -90,10 +90,8 @@ If `sync.py` keeps re-prompting for MFA on every run, check that:
 | ------------------ | ----------------------- | ------------------------ |
 | `max_metrics`      | `get_max_metrics(date)` | VO2max, fitness age      |
 | `personal_records` | `get_personal_record()` | All-time personal bests  |
-| `body_battery`     | `get_body_battery()`    | Current body battery     |
 | `devices`          | `get_devices()`         | Connected Garmin devices |
-| `goals`            | `get_goals()`           | Active fitness goals     |
-| `user_summary`     | `get_user_summary()`    | User overview data       |
+| `goals`            | `get_goals("active")`  | Active fitness goals     |
 
 ## Data Storage
 

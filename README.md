@@ -3,7 +3,7 @@
 **Your Garmin data + GitHub Copilot = personal health adviser**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-green.svg)](https://python.org)
+[![Python 3.12+](https://img.shields.io/badge/Python-3.12+-green.svg)](https://python.org)
 [![Tests](https://img.shields.io/badge/Tests-101%20passing-brightgreen.svg)](#running-tests)
 
 An **agent-first** health analysis system. No dashboards. No servers. Just your Garmin data and GitHub Copilot as your personal health adviser.
@@ -60,7 +60,7 @@ After every analysis, Copilot writes a summary to `data/summaries/`. Before the 
 
 ### Prerequisites
 
-- **Python 3.11+**
+- **Python 3.12+**
 - **Garmin Connect account** with data from a Garmin device
 - **VS Code** with [GitHub Copilot](https://github.com/features/copilot) (Chat)
 
@@ -293,8 +293,8 @@ All 126 tests cover: Garmin client auth/MFA, data store, profile management, sum
 
 | Requirement | Version |
 |------------|---------|
-| Python | 3.11+ |
-| garminconnect | ≥0.2 |
+| Python | 3.12+ |
+| garminconnect | 0.3.6 |
 | pydantic | ≥2.0 |
 | pyyaml | ≥6.0 |
 | python-dotenv | ≥1.0 |

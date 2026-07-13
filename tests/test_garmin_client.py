@@ -127,13 +127,16 @@ def _reset_fake_state():
     yield
 
 
-def test_connect_recovers_from_token_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    """Phase 1 token failure should clear tokenstore and fall through to credential login."""
+def test_connect_preserves_tokens_when_token_login_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    """A transient token-login failure must not destroy recoverable credentials."""
     tokenstore = tmp_path / "garmin_tokens"
     tokenstore.mkdir(parents=True, exist_ok=True)
-    # Place actual token files so Phase 1 is attempted
-    (tokenstore / "oauth1_token.json").write_text('{"broken": true}', encoding="utf-8")
-    (tokenstore / "oauth2_token.json").write_text('{"broken": true}', encoding="utf-8")
+    token_file = tokenstore / "garmin_tokens.json"
+    original_tokens = '{"di_token": "preserve-me"}'
+    token_file.write_text(original_tokens, encoding="utf-8")
 
     monkeypatch.setattr(client_module, "Garmin", _FakeGarmin)
 
@@ -144,8 +147,7 @@ def test_connect_recovers_from_token_failure(monkeypatch: pytest.MonkeyPatch, tm
     assert _FakeGarmin.login_calls[0] == ((), str(tokenstore))
     assert _FakeGarmin.login_calls[1] == (("user@example.com", "secret"), None)
     assert _FakeGarmin.dump_calls == [str(tokenstore)]
-    # Stale token files should be wiped
-    assert not (tokenstore / "oauth1_token.json").exists()
+    assert token_file.read_text(encoding="utf-8") == original_tokens
 
 
 def test_connect_raises_when_credentials_missing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
@@ -335,7 +337,7 @@ class _FakeGarminWithData(_FakeGarminTokenSuccess):
         return {"calendarDate": d, "overallStressLevel": 30}
 
     def get_steps_data(self, d):
-        return {"calendarDate": d}
+        return [{"calendarDate": d}]
 
     def get_respiration_data(self, d):
         return {"calendarDate": d}
@@ -350,7 +352,7 @@ class _FakeGarminWithData(_FakeGarminTokenSuccess):
         return {"calendarDate": d}
 
     def get_training_readiness(self, d):
-        return {"calendarDate": d}
+        return [{"calendarDate": d, "score": 72}]
 
     def get_training_status(self, d):
         return {"calendarDate": d}
@@ -391,17 +393,51 @@ class _FakeGarminWithData(_FakeGarminTokenSuccess):
     def get_personal_record(self):
         return [{"typeId": 1, "value": 1200.0}]
 
-    def get_body_battery(self):
-        return [{"charged": 85, "drained": 22}]
+    def get_body_battery(self, start, end):
+        return [{"date": start, "endDate": end, "charged": 85, "drained": 22}]
 
     def get_devices(self):
         return [{"productDisplayName": "Forerunner 265"}]
 
-    def get_goals(self, goal_type="all"):
-        return [{"goalId": "1", "goalType": "steps"}]
+    def get_goals(self, status="active", start=0, limit=30):
+        return [{"goalId": "1", "goalType": "steps", "status": status}]
 
-    def get_user_summary(self):
-        return {"displayName": "TestUser"}
+    def get_user_summary(self, d):
+        return {"calendarDate": d, "displayName": "TestUser"}
+
+
+def test_wrappers_match_garminconnect_036_contracts() -> None:
+    """Wrapper arguments and defaults should match garminconnect 0.3.6."""
+    from datetime import date
+
+    client = GarminClient(use_env_credentials=False)
+    client._api = _FakeGarminWithData()
+    start = date(2026, 7, 10)
+    end = date(2026, 7, 11)
+
+    assert client.get_body_battery(start, end)[0]["date"] == start.isoformat()
+    assert client.get_goals()[0]["status"] == "active"
+    assert client.get_user_summary(end)["calendarDate"] == end.isoformat()
+
+
+def test_fetch_all_normalizes_list_responses_and_skips_duplicates() -> None:
+    """Per-day lists stay flat and redundant/unsupported ranges are omitted."""
+    from datetime import date
+
+    client = GarminClient(use_env_credentials=False)
+    client._api = _FakeGarminWithData()
+    day = date(2026, 7, 10)
+
+    result = client.fetch_all(day, day)
+
+    assert result["steps"] == [{"calendarDate": day.isoformat()}]
+    assert result["training_readiness"] == [
+        {"calendarDate": day.isoformat(), "score": 72}
+    ]
+    assert result["body_battery"][0]["date"] == day.isoformat()
+    assert result["goals"][0]["status"] == "active"
+    assert "daily_sleep_range" not in result
+    assert "user_summary" not in result
 
 
 def test_fetch_all_returns_all_data_types(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):

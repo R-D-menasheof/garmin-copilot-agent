@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import logging
 import os
-import shutil
 import uuid
 from datetime import date, timedelta
 from pathlib import Path
@@ -50,25 +49,19 @@ class GarminClient:
         email: str | None = None,
         password: str | None = None,
         tokenstore: str | None = None,
+        use_env_credentials: bool = True,
     ) -> None:
-        self._email = email or os.getenv("GARMIN_EMAIL", "")
-        self._password = password or os.getenv("GARMIN_PASSWORD", "")
+        if use_env_credentials:
+            self._email = email if email is not None else os.getenv("GARMIN_EMAIL", "")
+            self._password = (
+                password if password is not None else os.getenv("GARMIN_PASSWORD", "")
+            )
+        else:
+            # Multi-user sync must never inherit the owner's Garmin account.
+            self._email = email or ""
+            self._password = password or ""
         self._tokenstore = tokenstore or os.getenv("GARMINTOKENS", str(_DEFAULT_TOKEN_DIR))
         self._api: Garmin | None = None
-
-    @staticmethod
-    def _clear_tokenstore(tokenstore_path: Path) -> None:
-        """Remove every file inside the tokenstore directory."""
-        if not tokenstore_path.exists():
-            return
-        for item in tokenstore_path.iterdir():
-            try:
-                if item.is_dir():
-                    shutil.rmtree(item, ignore_errors=True)
-                else:
-                    item.unlink(missing_ok=True)
-            except Exception as exc:  # pragma: no cover – OneDrive may lock
-                logger.warning("Could not delete %s: %s", item, exc)
 
     # ------------------------------------------------------------------
     # connect() — main authentication entry point
@@ -98,32 +91,45 @@ class GarminClient:
                     "Please try syncing again."
                 )
             self._api = session["garmin"]
-            self._api.resume_login(session["state"], mfa_code)
+            # garminconnect 0.3.3: client_state is unused (MFA state is held
+            # on the Garmin instance itself); only mfa_code matters.
+            self._api.resume_login(session.get("state") or {}, mfa_code)
+            self._load_profile_and_settings()
             try:
-                self._api.garth.dump(str(tokenstore_path))
+                self._api.client.dump(str(tokenstore_path))
                 logger.info("MFA login completed; tokens saved to %s", tokenstore_path)
             except Exception as exc:  # pragma: no cover
                 logger.warning("Could not persist OAuth tokens after MFA: %s", exc)
-            self._load_profile_and_settings()
             return
 
         # ----- Phase 1: try existing OAuth tokens (only if files exist) -----
+        # garminconnect 0.3.3 saves a single `garmin_tokens.json`.
+        # Older garth-based versions saved `oauth1_token.json` + `oauth2_token.json`.
+        # Either layout is loadable via Garmin().login(<dir>).
+        new_token_file = tokenstore_path / "garmin_tokens.json"
         oauth1_file = tokenstore_path / "oauth1_token.json"
         oauth2_file = tokenstore_path / "oauth2_token.json"
-        if oauth1_file.exists() and oauth2_file.exists():
+        has_tokens = new_token_file.exists() or (
+            oauth1_file.exists() and oauth2_file.exists()
+        )
+        if has_tokens:
             try:
                 self._api = Garmin()
                 self._api.login(str(tokenstore_path))
+                if not getattr(self._api, "display_name", None):
+                    self._load_profile_and_settings()
                 logger.info("Logged in using stored OAuth tokens.")
                 try:
-                    self._api.garth.dump(str(tokenstore_path))
+                    self._api.client.dump(str(tokenstore_path))
                 except Exception:  # pragma: no cover
                     pass  # best-effort re-persist after potential token refresh
-                self._load_profile_and_settings()
                 return
             except Exception as exc:
-                logger.warning("Token-based login failed: %s — wiping tokens.", exc)
-                self._clear_tokenstore(tokenstore_path)
+                logger.warning(
+                    "Token-based login failed; preserving tokenstore %s: %s",
+                    tokenstore_path,
+                    exc,
+                )
         else:
             logger.info(
                 "No stored tokens in %s — skipping to credential login.",
@@ -150,12 +156,12 @@ class GarminClient:
                 os.environ["GARMINTOKENS"] = old_env
 
         # ----- Handle MFA -----
+        # garminconnect 0.3.3: login(return_on_mfa=True) returns
+        # ("needs_mfa", None) when MFA is required.  The MFA state
+        # (session cookies, login params, mfa method) is stored on the
+        # Garmin instance itself, so we just need to keep the instance
+        # alive in memory until the user enters the code.
         if result1 == "needs_mfa":
-            if not isinstance(result2, dict):
-                raise GarminMFARequiredError(
-                    "Garmin requires MFA but returned unexpected data.",
-                    session_id="",
-                )
             session_id = uuid.uuid4().hex
             _pending_mfa_sessions[session_id] = {
                 "garmin": self._api,
@@ -170,7 +176,7 @@ class GarminClient:
         # ----- Success without MFA -----
         self._load_profile_and_settings()
         try:
-            self._api.garth.dump(str(tokenstore_path))
+            self._api.client.dump(str(tokenstore_path))
             logger.info("OAuth tokens saved to %s", tokenstore_path)
         except Exception as exc:  # pragma: no cover
             logger.warning("Could not persist OAuth tokens: %s", exc)
@@ -183,8 +189,16 @@ class GarminClient:
         """
         if self._api is None:
             return
+        transport = getattr(self._api, "client", None) or getattr(
+            self._api,
+            "garth",
+            None,
+        )
+        if transport is None or not hasattr(transport, "connectapi"):
+            logger.warning("Could not load Garmin profile: no Connect API transport")
+            return
         try:
-            profile = self._api.garth.connectapi(
+            profile = transport.connectapi(
                 "/userprofile-service/userprofile/profile"
             )
             if profile and isinstance(profile, dict):
@@ -193,7 +207,7 @@ class GarminClient:
         except Exception as exc:
             logger.warning("Could not load profile: %s", exc)
         try:
-            settings = self._api.garth.connectapi(
+            settings = transport.connectapi(
                 "/userprofile-service/userprofile/user-settings"
             )
             if settings and isinstance(settings, dict) and "userData" in settings:
@@ -226,7 +240,7 @@ class GarminClient:
     def get_stress(self, day: date) -> dict[str, Any]:
         return self.api.get_stress_data(day.isoformat())
 
-    def get_steps(self, day: date) -> dict[str, Any]:
+    def get_steps(self, day: date) -> list[dict[str, Any]]:
         return self.api.get_steps_data(day.isoformat())
 
     def get_respiration(self, day: date) -> dict[str, Any]:
@@ -238,10 +252,10 @@ class GarminClient:
     def get_rhr(self, day: date) -> dict[str, Any]:
         return self.api.get_rhr_day(day.isoformat())
 
-    def get_hrv(self, day: date) -> dict[str, Any]:
+    def get_hrv(self, day: date) -> dict[str, Any] | None:
         return self.api.get_hrv_data(day.isoformat())
 
-    def get_training_readiness(self, day: date) -> dict[str, Any]:
+    def get_training_readiness(self, day: date) -> list[dict[str, Any]]:
         return self.api.get_training_readiness(day.isoformat())
 
     def get_training_status(self, day: date) -> dict[str, Any]:
@@ -285,18 +299,22 @@ class GarminClient:
     def get_daily_steps(self, start: date, end: date) -> list[dict[str, Any]]:
         return self.api.get_daily_steps(start.isoformat(), end.isoformat())
 
-    def get_daily_sleep(self, start: date, end: date) -> list[dict[str, Any]]:
-        return self.api.get_daily_sleep(start.isoformat(), end.isoformat())
-
     # ------------------------------------------------------------------
     # One-time / snapshot fetchers
     # ------------------------------------------------------------------
 
-    def get_user_summary(self) -> dict[str, Any]:
-        return self.api.get_user_summary()
+    def get_user_summary(self, day: date) -> dict[str, Any]:
+        return self.api.get_user_summary(day.isoformat())
 
-    def get_body_battery(self) -> list[dict[str, Any]]:
-        return self.api.get_body_battery()
+    def get_body_battery(
+        self,
+        start: date,
+        end: date | None = None,
+    ) -> list[dict[str, Any]]:
+        return self.api.get_body_battery(
+            start.isoformat(),
+            end.isoformat() if end is not None else None,
+        )
 
     def get_max_metrics(self, day: date) -> dict[str, Any]:
         return self.api.get_max_metrics(day.isoformat())
@@ -310,8 +328,13 @@ class GarminClient:
     def get_device_settings(self, device_id: str) -> dict[str, Any]:
         return self.api.get_device_settings(device_id)
 
-    def get_goals(self, goal_type: str = "all") -> list[dict[str, Any]]:
-        return self.api.get_goals(goal_type)
+    def get_goals(
+        self,
+        status: str = "active",
+        start: int = 0,
+        limit: int = 30,
+    ) -> list[dict[str, Any]]:
+        return self.api.get_goals(status, start, limit)
 
     # ------------------------------------------------------------------
     # fetch_all() — comprehensive data fetch
@@ -370,7 +393,9 @@ class GarminClient:
             for key, method_name in per_day_methods:
                 try:
                     data = getattr(self, method_name)(day)
-                    if data:
+                    if isinstance(data, list):
+                        result[key].extend(data)
+                    elif data:
                         result[key].append(data)
                 except Exception as exc:
                     logger.debug("Skipping %s for %s: %s", key, day, exc)
@@ -394,12 +419,6 @@ class GarminClient:
             logger.debug("Skipping daily_steps_range: %s", exc)
             result["daily_steps_range"] = []
 
-        try:
-            result["daily_sleep_range"] = self.get_daily_sleep(start_date, end_date)
-        except Exception as exc:
-            logger.debug("Skipping daily_sleep_range: %s", exc)
-            result["daily_sleep_range"] = []
-
         # Snapshot / one-time methods
         try:
             result["max_metrics"] = self.get_max_metrics(end_date)
@@ -414,7 +433,7 @@ class GarminClient:
             result["personal_records"] = []
 
         try:
-            result["body_battery"] = self.get_body_battery()
+            result["body_battery"] = self.get_body_battery(start_date, end_date)
         except Exception as exc:
             logger.debug("Skipping body_battery: %s", exc)
             result["body_battery"] = []
@@ -430,12 +449,6 @@ class GarminClient:
         except Exception as exc:
             logger.debug("Skipping goals: %s", exc)
             result["goals"] = []
-
-        try:
-            result["user_summary"] = self.get_user_summary()
-        except Exception as exc:
-            logger.debug("Skipping user_summary: %s", exc)
-            result["user_summary"] = {}
 
         logger.info(
             "fetch_all %s → %s: %d data types collected",

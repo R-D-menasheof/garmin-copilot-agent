@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import logging
 import os
-import shutil
 import uuid
 from datetime import date, timedelta
 from pathlib import Path
@@ -63,20 +62,6 @@ class GarminClient:
             self._password = password or ""
         self._tokenstore = tokenstore or os.getenv("GARMINTOKENS", str(_DEFAULT_TOKEN_DIR))
         self._api: Garmin | None = None
-
-    @staticmethod
-    def _clear_tokenstore(tokenstore_path: Path) -> None:
-        """Remove every file inside the tokenstore directory."""
-        if not tokenstore_path.exists():
-            return
-        for item in tokenstore_path.iterdir():
-            try:
-                if item.is_dir():
-                    shutil.rmtree(item, ignore_errors=True)
-                else:
-                    item.unlink(missing_ok=True)
-            except Exception as exc:  # pragma: no cover – OneDrive may lock
-                logger.warning("Could not delete %s: %s", item, exc)
 
     # ------------------------------------------------------------------
     # connect() — main authentication entry point
@@ -140,8 +125,11 @@ class GarminClient:
                     pass  # best-effort re-persist after potential token refresh
                 return
             except Exception as exc:
-                logger.warning("Token-based login failed: %s — wiping tokens.", exc)
-                self._clear_tokenstore(tokenstore_path)
+                logger.warning(
+                    "Token-based login failed; preserving tokenstore %s: %s",
+                    tokenstore_path,
+                    exc,
+                )
         else:
             logger.info(
                 "No stored tokens in %s — skipping to credential login.",
@@ -252,7 +240,7 @@ class GarminClient:
     def get_stress(self, day: date) -> dict[str, Any]:
         return self.api.get_stress_data(day.isoformat())
 
-    def get_steps(self, day: date) -> dict[str, Any]:
+    def get_steps(self, day: date) -> list[dict[str, Any]]:
         return self.api.get_steps_data(day.isoformat())
 
     def get_respiration(self, day: date) -> dict[str, Any]:
@@ -264,10 +252,10 @@ class GarminClient:
     def get_rhr(self, day: date) -> dict[str, Any]:
         return self.api.get_rhr_day(day.isoformat())
 
-    def get_hrv(self, day: date) -> dict[str, Any]:
+    def get_hrv(self, day: date) -> dict[str, Any] | None:
         return self.api.get_hrv_data(day.isoformat())
 
-    def get_training_readiness(self, day: date) -> dict[str, Any]:
+    def get_training_readiness(self, day: date) -> list[dict[str, Any]]:
         return self.api.get_training_readiness(day.isoformat())
 
     def get_training_status(self, day: date) -> dict[str, Any]:
@@ -311,18 +299,22 @@ class GarminClient:
     def get_daily_steps(self, start: date, end: date) -> list[dict[str, Any]]:
         return self.api.get_daily_steps(start.isoformat(), end.isoformat())
 
-    def get_daily_sleep(self, start: date, end: date) -> list[dict[str, Any]]:
-        return self.api.get_daily_sleep(start.isoformat(), end.isoformat())
-
     # ------------------------------------------------------------------
     # One-time / snapshot fetchers
     # ------------------------------------------------------------------
 
-    def get_user_summary(self) -> dict[str, Any]:
-        return self.api.get_user_summary()
+    def get_user_summary(self, day: date) -> dict[str, Any]:
+        return self.api.get_user_summary(day.isoformat())
 
-    def get_body_battery(self) -> list[dict[str, Any]]:
-        return self.api.get_body_battery()
+    def get_body_battery(
+        self,
+        start: date,
+        end: date | None = None,
+    ) -> list[dict[str, Any]]:
+        return self.api.get_body_battery(
+            start.isoformat(),
+            end.isoformat() if end is not None else None,
+        )
 
     def get_max_metrics(self, day: date) -> dict[str, Any]:
         return self.api.get_max_metrics(day.isoformat())
@@ -336,8 +328,13 @@ class GarminClient:
     def get_device_settings(self, device_id: str) -> dict[str, Any]:
         return self.api.get_device_settings(device_id)
 
-    def get_goals(self, goal_type: str = "all") -> list[dict[str, Any]]:
-        return self.api.get_goals(goal_type)
+    def get_goals(
+        self,
+        status: str = "active",
+        start: int = 0,
+        limit: int = 30,
+    ) -> list[dict[str, Any]]:
+        return self.api.get_goals(status, start, limit)
 
     # ------------------------------------------------------------------
     # fetch_all() — comprehensive data fetch
@@ -396,7 +393,9 @@ class GarminClient:
             for key, method_name in per_day_methods:
                 try:
                     data = getattr(self, method_name)(day)
-                    if data:
+                    if isinstance(data, list):
+                        result[key].extend(data)
+                    elif data:
                         result[key].append(data)
                 except Exception as exc:
                     logger.debug("Skipping %s for %s: %s", key, day, exc)
@@ -420,12 +419,6 @@ class GarminClient:
             logger.debug("Skipping daily_steps_range: %s", exc)
             result["daily_steps_range"] = []
 
-        try:
-            result["daily_sleep_range"] = self.get_daily_sleep(start_date, end_date)
-        except Exception as exc:
-            logger.debug("Skipping daily_sleep_range: %s", exc)
-            result["daily_sleep_range"] = []
-
         # Snapshot / one-time methods
         try:
             result["max_metrics"] = self.get_max_metrics(end_date)
@@ -440,7 +433,7 @@ class GarminClient:
             result["personal_records"] = []
 
         try:
-            result["body_battery"] = self.get_body_battery()
+            result["body_battery"] = self.get_body_battery(start_date, end_date)
         except Exception as exc:
             logger.debug("Skipping body_battery: %s", exc)
             result["body_battery"] = []
@@ -456,12 +449,6 @@ class GarminClient:
         except Exception as exc:
             logger.debug("Skipping goals: %s", exc)
             result["goals"] = []
-
-        try:
-            result["user_summary"] = self.get_user_summary()
-        except Exception as exc:
-            logger.debug("Skipping user_summary: %s", exc)
-            result["user_summary"] = {}
 
         logger.info(
             "fetch_all %s → %s: %d data types collected",
