@@ -1,7 +1,9 @@
 """Set nutrition goals — CLI for the External Agent.
 
 Usage:
-    python scripts/set_goals.py --calories 2200 --protein 180 --carbs 250 --fat 70
+    python scripts/set_goals.py --calories 1800 --protein 120 --carbs 195 \
+        --fat 60 --weight 80 --tdee 2400 \
+        --calculation-method mifflin_st_jeor+garmin
 
 Calls POST /api/v1/goals to set the current week's nutrition targets.
 The Vitalis GHCP agent runs this via `execute` after weekly analysis.
@@ -63,6 +65,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Rest-day carbs target (grams). Optional.",
     )
     p.add_argument(
+        "--weight", type=float, required=True,
+        help="Current weight used by the calculation (kg).",
+    )
+    p.add_argument(
+        "--tdee", type=int, required=True,
+        help="Estimated or observed TDEE used by the calculation (kcal).",
+    )
+    p.add_argument(
+        "--calculation-method", required=True,
+        help="Calculation method identifier, e.g. mifflin_st_jeor+garmin.",
+    )
+    p.add_argument(
+        "--calculation-version", type=int, default=1,
+        help="Calculation policy version (default: 1).",
+    )
+    p.add_argument(
         "--user-id",
         help=(
             "Owner op: write goals directly to this user's cloud storage "
@@ -78,6 +96,10 @@ def send_goals(
     protein: float,
     carbs: float,
     fat: float,
+    calculated_from_weight_kg: float,
+    estimated_tdee_kcal: int,
+    calculation_method: str,
+    calculation_version: int = 1,
     rest_calories: int | None = None,
     rest_carbs: float | None = None,
     api_url: str | None = None,
@@ -90,6 +112,10 @@ def send_goals(
         protein: Daily protein target (grams).
         carbs: Daily carbs target (grams, training days).
         fat: Daily fat target (grams).
+        calculated_from_weight_kg: Weight used by the calculation (kg).
+        estimated_tdee_kcal: TDEE used by the calculation (kcal).
+        calculation_method: Calculation method identifier.
+        calculation_version: Calculation policy version.
         rest_calories: Rest-day calorie target. Optional.
         rest_carbs: Rest-day carbs target (grams). Optional.
         api_url: Base API URL. Defaults to VITALIS_API_URL env var.
@@ -101,6 +127,14 @@ def send_goals(
     Raises:
         Exception: If the API returns an error status.
     """
+    _validate_goal_math(
+        calories,
+        protein,
+        carbs,
+        fat,
+        rest_calories=rest_calories,
+        rest_carbs=rest_carbs,
+    )
     url = api_url or os.environ.get("VITALIS_API_URL", "http://localhost:7071/api")
     key = api_key or os.environ.get("VITALIS_API_KEY", "")
 
@@ -111,6 +145,10 @@ def send_goals(
         "carbs_g_target": carbs,
         "fat_g_target": fat,
         "set_by": "agent",
+        "calculated_from_weight_kg": calculated_from_weight_kg,
+        "estimated_tdee_kcal": estimated_tdee_kcal,
+        "calculation_method": calculation_method,
+        "calculation_version": calculation_version,
     }
     if rest_calories is not None:
         payload["rest_calories_target"] = rest_calories
@@ -136,6 +174,10 @@ def save_goals_direct(
     protein: float,
     carbs: float,
     fat: float,
+    calculated_from_weight_kg: float,
+    estimated_tdee_kcal: int,
+    calculation_method: str,
+    calculation_version: int = 1,
     rest_calories: int | None = None,
     rest_carbs: float | None = None,
     store=None,
@@ -151,6 +193,10 @@ def save_goals_direct(
         protein: Daily protein target (grams).
         carbs: Daily carbs target (grams, training days).
         fat: Daily fat target (grams).
+        calculated_from_weight_kg: Weight used by the calculation (kg).
+        estimated_tdee_kcal: TDEE used by the calculation (kcal).
+        calculation_method: Calculation method identifier.
+        calculation_version: Calculation policy version.
         rest_calories: Rest-day calorie target. Optional.
         rest_carbs: Rest-day carbs target (grams). Optional.
         store: Optional pre-built store (for tests). Falls back to get_store.
@@ -158,6 +204,14 @@ def save_goals_direct(
     Returns:
         Status dict with the target user_id and stored goal.
     """
+    _validate_goal_math(
+        calories,
+        protein,
+        carbs,
+        fat,
+        rest_calories=rest_calories,
+        rest_carbs=rest_carbs,
+    )
     goal = NutritionGoal(
         date=date.today(),
         calories_target=calories,
@@ -167,6 +221,10 @@ def save_goals_direct(
         rest_calories_target=rest_calories,
         rest_carbs_g_target=rest_carbs,
         set_by="agent",
+        calculated_from_weight_kg=calculated_from_weight_kg,
+        estimated_tdee_kcal=estimated_tdee_kcal,
+        calculation_method=calculation_method,
+        calculation_version=calculation_version,
     )
     if store is None:
         from _users import get_store  # lazy: pulls in api/ + azure only when used
@@ -174,6 +232,32 @@ def save_goals_direct(
         store = get_store(user_id)
     store.save_goals(goal)
     return {"status": "ok", "user_id": user_id, "goal": goal.model_dump(mode="json")}
+
+
+def _validate_goal_math(
+    calories: int,
+    protein: float,
+    carbs: float,
+    fat: float,
+    *,
+    rest_calories: int | None,
+    rest_carbs: float | None,
+) -> None:
+    """Reject calorie targets that do not match their macro energy."""
+    macro_calories = round(protein * 4 + carbs * 4 + fat * 9)
+    if macro_calories != calories:
+        raise ValueError(
+            f"macro calories ({macro_calories}) must equal target ({calories})"
+        )
+    if (rest_calories is None) != (rest_carbs is None):
+        raise ValueError("rest calories and rest carbs must be provided together")
+    if rest_calories is not None and rest_carbs is not None:
+        rest_macro_calories = round(protein * 4 + rest_carbs * 4 + fat * 9)
+        if rest_macro_calories != rest_calories:
+            raise ValueError(
+                "rest macro calories "
+                f"({rest_macro_calories}) must equal target ({rest_calories})"
+            )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -193,12 +277,20 @@ def main(argv: list[str] | None = None) -> int:
             result = save_goals_direct(
                 args.user_id,
                 args.calories, args.protein, args.carbs, args.fat,
+                calculated_from_weight_kg=args.weight,
+                estimated_tdee_kcal=args.tdee,
+                calculation_method=args.calculation_method,
+                calculation_version=args.calculation_version,
                 rest_calories=args.rest_calories,
                 rest_carbs=args.rest_carbs,
             )
         else:
             result = send_goals(
                 args.calories, args.protein, args.carbs, args.fat,
+                calculated_from_weight_kg=args.weight,
+                estimated_tdee_kcal=args.tdee,
+                calculation_method=args.calculation_method,
+                calculation_version=args.calculation_version,
                 rest_calories=args.rest_calories,
                 rest_carbs=args.rest_carbs,
             )

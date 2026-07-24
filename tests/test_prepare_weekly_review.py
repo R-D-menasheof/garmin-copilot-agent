@@ -41,6 +41,7 @@ def _store() -> MagicMock:
         last_synced=date(2026, 7, 10),
     )
     store.load_goals.return_value = None
+    store.load_biometrics_range.return_value = {}
     store.load_goal_programs.return_value = []
     store.load_active_training_program.return_value = None
     store.load_recommendation_statuses.return_value = []
@@ -76,6 +77,9 @@ def test_builds_deterministic_user_scoped_packet() -> None:
     assert len(packet["context_sha256"]) == 64
     assert packet["data_quality"]["last_synced"] == "2026-07-10"
     assert packet["data_quality"]["sync_freshness"] == "fresh"
+    assert packet["nutrition_goal_audit"]["status"] == "missing_profile_inputs"
+    assert packet["data_quality"]["has_nutrition_goal"] is False
+    assert packet["data_quality"]["nutrition_goal_status"] == "missing_profile_inputs"
     assert packet["local_report_directory"].endswith(
         f"data\\users\\{USER_ID}\\reports"
     )

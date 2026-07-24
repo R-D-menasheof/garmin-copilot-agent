@@ -12,6 +12,10 @@ class NutritionGoal {
   final int? restCaloriesTarget;
   final double? restCarbsGTarget;
   final String setBy;
+  final double? calculatedFromWeightKg;
+  final int? estimatedTdeeKcal;
+  final String? calculationMethod;
+  final int? calculationVersion;
 
   const NutritionGoal({
     required this.date,
@@ -22,6 +26,10 @@ class NutritionGoal {
     this.restCaloriesTarget,
     this.restCarbsGTarget,
     required this.setBy,
+    this.calculatedFromWeightKg,
+    this.estimatedTdeeKcal,
+    this.calculationMethod,
+    this.calculationVersion,
   });
 
   factory NutritionGoal.fromJson(Map<String, dynamic> json) => NutritionGoal(
@@ -33,6 +41,11 @@ class NutritionGoal {
         restCaloriesTarget: json['rest_calories_target'] as int?,
         restCarbsGTarget: (json['rest_carbs_g_target'] as num?)?.toDouble(),
         setBy: json['set_by'] as String,
+        calculatedFromWeightKg:
+            (json['calculated_from_weight_kg'] as num?)?.toDouble(),
+        estimatedTdeeKcal: json['estimated_tdee_kcal'] as int?,
+        calculationMethod: json['calculation_method'] as String?,
+        calculationVersion: json['calculation_version'] as int?,
       );
 
   /// Whether [day] is a rest day (Friday or Saturday).
@@ -77,5 +90,11 @@ class NutritionGoal {
           'rest_calories_target': restCaloriesTarget,
         if (restCarbsGTarget != null) 'rest_carbs_g_target': restCarbsGTarget,
         'set_by': setBy,
+        if (calculatedFromWeightKg != null)
+          'calculated_from_weight_kg': calculatedFromWeightKg,
+        if (estimatedTdeeKcal != null) 'estimated_tdee_kcal': estimatedTdeeKcal,
+        if (calculationMethod != null) 'calculation_method': calculationMethod,
+        if (calculationVersion != null)
+          'calculation_version': calculationVersion,
       };
 }

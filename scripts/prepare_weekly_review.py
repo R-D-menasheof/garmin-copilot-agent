@@ -17,6 +17,7 @@ import sys
 from datetime import date, timedelta
 
 from _users import get_store, normalize_user_id, user_reports_directory
+from audit_nutrition_goals import audit_goal, observed_tdee_from_biometrics
 
 
 def _dump(value):
@@ -80,10 +81,25 @@ def build_weekly_context(
     sleep_entries = store.load_sleep_entries(start, end)
     summary_history = store.load_summary_history(limit=2)
     profile = store.load_profile()
+    nutrition_goal = store.load_goals()
     last_synced, sync_freshness = _sync_freshness(profile, start, end)
 
     biometrics = combined.get("biometrics", {})
     nutrition = combined.get("nutrition", {})
+    tdee_records = store.load_biometrics_range(end - timedelta(days=13), end)
+    tdee_biometrics = {
+        str(day): value.model_dump(mode="json")
+        if hasattr(value, "model_dump")
+        else value
+        for day, value in tdee_records.items()
+    }
+    observed_tdee_kcal = observed_tdee_from_biometrics(tdee_biometrics)
+    nutrition_goal_audit = audit_goal(
+        profile,
+        nutrition_goal,
+        today=end,
+        observed_tdee_kcal=observed_tdee_kcal,
+    )
     biometric_days = sum(
         1 for value in biometrics.values() if _has_biometric_metrics(value)
     )
@@ -103,7 +119,8 @@ def build_weekly_context(
         "biometrics": biometrics,
         "nutrition": nutrition,
         "sleep_entries": [_dump(item) for item in sleep_entries],
-        "nutrition_goals": _dump(store.load_goals()),
+        "nutrition_goals": _dump(nutrition_goal),
+        "nutrition_goal_audit": nutrition_goal_audit,
         "goal_programs": [_dump(item) for item in store.load_goal_programs()],
         "active_training": _dump(store.load_active_training_program()),
         "recommendation_statuses": [
@@ -118,6 +135,8 @@ def build_weekly_context(
             "missing_nutrition_days": days - nutrition_days,
             "has_profile": profile is not None,
             "has_previous_summary": bool(summary_history),
+            "has_nutrition_goal": nutrition_goal is not None,
+            "nutrition_goal_status": nutrition_goal_audit["status"],
             "last_synced": last_synced,
             "sync_freshness": sync_freshness,
         },

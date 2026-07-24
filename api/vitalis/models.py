@@ -58,6 +58,10 @@ class NutritionGoal(BaseModel):
     rest_calories_target: Optional[int] = Field(default=None, ge=0)
     rest_carbs_g_target: Optional[float] = Field(default=None, ge=0)
     set_by: str = Field(pattern=r"^(user|agent)$", description="Who set this goal")
+    calculated_from_weight_kg: Optional[float] = Field(default=None, gt=0)
+    estimated_tdee_kcal: Optional[int] = Field(default=None, gt=0)
+    calculation_method: Optional[str] = Field(default=None, min_length=1)
+    calculation_version: Optional[int] = Field(default=None, ge=1)
     created_at: datetime = Field(default_factory=datetime.now)
 
 

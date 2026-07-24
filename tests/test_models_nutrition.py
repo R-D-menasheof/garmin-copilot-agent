@@ -153,6 +153,27 @@ class TestNutritionGoal:
         assert goal.rest_calories_target == 2250
         assert goal.rest_carbs_g_target == 200.0
 
+    def test_calculation_provenance_roundtrip(self) -> None:
+        goal = NutritionGoal(
+            date=date(2026, 7, 24),
+            calories_target=1800,
+            protein_g_target=120.0,
+            carbs_g_target=195.0,
+            fat_g_target=60.0,
+            set_by="agent",
+            calculated_from_weight_kg=80.0,
+            estimated_tdee_kcal=2400,
+            calculation_method="mifflin_st_jeor+garmin",
+            calculation_version=1,
+        )
+
+        restored = NutritionGoal.model_validate(goal.model_dump(mode="json"))
+
+        assert restored.calculated_from_weight_kg == 80.0
+        assert restored.estimated_tdee_kcal == 2400
+        assert restored.calculation_method == "mifflin_st_jeor+garmin"
+        assert restored.calculation_version == 1
+
 
 # ── DailyNutritionLog ────────────────────────────────────────────
 
