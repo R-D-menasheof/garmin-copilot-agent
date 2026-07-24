@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -113,14 +115,17 @@ void main() async {
         ChangeNotifierProvider(create: (_) => GoalsProgramProvider(apiClient)),
         ChangeNotifierProvider(create: (_) => MedicalProvider(apiClient)),
         ChangeNotifierProvider(create: (_) => ProfileProvider(apiClient)),
-        ChangeNotifierProvider(create: (_) {
-          final provider = BiometricsProvider(
+        ChangeNotifierProxyProvider<AuthProvider, BiometricsProvider>(
+          create: (_) => BiometricsProvider(
             healthConnect,
             apiClient: apiClient,
-          );
-          provider.init(); // Load Health Connect data on startup
-          return provider;
-        }),
+          ),
+          update: (_, auth, biometrics) {
+            final provider = biometrics!;
+            unawaited(provider.setAuthenticatedUser(auth.userId));
+            return provider;
+          },
+        ),
       ],
       child: const VitalisApp(),
     ),

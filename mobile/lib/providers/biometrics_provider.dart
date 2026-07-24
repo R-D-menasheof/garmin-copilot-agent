@@ -25,6 +25,7 @@ class BiometricsProvider extends ChangeNotifier {
   final ApiClient? _apiClient;
   final DateTime Function() _now;
   final int _syncWindowDays;
+  String? _authenticatedUserId;
 
   BiometricsRecord? _latest;
   BiometricsRecord? get latest => _latest;
@@ -119,6 +120,27 @@ class BiometricsProvider extends ChangeNotifier {
   /// Request Health Connect permissions and load today's data.
   Future<void> init() async {
     await loadToday();
+  }
+
+  /// Load biometrics once per authenticated user and clear them on sign-out.
+  Future<void> setAuthenticatedUser(String? userId) async {
+    if (_authenticatedUserId == userId) {
+      return;
+    }
+
+    _authenticatedUserId = userId;
+    _latest = null;
+    _loading = false;
+    _permissionGranted = false;
+    _state = BiometricsState.idle;
+    _primaryAction = null;
+    _statusMessage = null;
+    _lastUpdatedAt = null;
+    notifyListeners();
+
+    if (userId != null) {
+      await loadToday();
+    }
   }
 
   /// Load today's biometrics from Health Connect.
@@ -220,6 +242,7 @@ class BiometricsProvider extends ChangeNotifier {
   Future<void> _syncRecentBiometrics({required DateTime endDate}) async {
     final apiClient = _apiClient;
     if (apiClient == null ||
+        _authenticatedUserId == null ||
         _availability != HealthConnectAvailability.available ||
         _syncWindowDays <= 0) {
       return;
