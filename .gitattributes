@@ -1,0 +1,26 @@
+# Store text consistently as LF on every platform.
+* text=auto eol=lf
+
+# Windows shell scripts require CRLF for native tooling.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets must never undergo line-ending conversion.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.jar binary
+*.apk binary
+*.jks binary
+*.keystore binary
+*.so binary
+*.dll binary
+*.exe binary
+*.ttf binary
+*.otf binary
