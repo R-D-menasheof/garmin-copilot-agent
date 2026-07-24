@@ -6,6 +6,12 @@ plugins {
     id "com.google.gms.google-services"
 }
 
+def keystorePropertiesFile = rootProject.file("key.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace = "com.vitalis.vitalis"
     compileSdk = flutter.compileSdkVersion
@@ -37,17 +43,40 @@ android {
         manifestPlaceholders += [appAuthRedirectScheme: 'com.vitalis.vitalis']
     }
 
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias = keystoreProperties['keyAlias']
+                keyPassword = keystoreProperties['keyPassword']
+                storeFile = file(keystoreProperties['storeFile'])
+                storePassword = keystoreProperties['storePassword']
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.debug
+            // Release builds use a stable private key so Firebase-distributed
+            // builds can update the installed app without another uninstall.
+            signingConfig = signingConfigs.release
             // flutter_appauth (net.openid.appauth) ships no consumer ProGuard
             // rules; R8 was stripping its classes and crashing the release app
             // on launch. Disable shrinking to keep all auth classes intact.
             minifyEnabled false
             shrinkResources false
         }
+    }
+}
+
+gradle.taskGraph.whenReady { graph ->
+    def needsReleaseSigning = graph.allTasks.any {
+        it.name.toLowerCase().contains('release')
+    }
+    if (needsReleaseSigning && !keystorePropertiesFile.exists()) {
+        throw new GradleException(
+            "Missing android/key.properties. " +
+            "Create the private release signing files before building release."
+        )
     }
 }
 

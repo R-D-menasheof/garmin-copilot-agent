@@ -30,6 +30,10 @@ data/.secrets/
 **/google-services.json
 **/GoogleService-Info.plist
 
+# Android release signing — private key + passwords (never commit)
+mobile/android/key.properties
+mobile/android/upload-keystore.jks
+
 # IDE
 .vscode/settings.json
 .idea/
@@ -97,6 +101,7 @@ scripts/_*.py
 %TEMP%/
 tmp-api-deploy/
 tmp-*.zip
+artifacts/
 
 # OneDrive conflict copies
 *-CPC-*.py
