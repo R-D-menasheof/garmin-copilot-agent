@@ -94,7 +94,8 @@ health-analyst reads combined data + Garmin synced data
   ↓
 Analysis: "HRV dropped + weight up, despite calorie compliance"
   ↓
-scripts/set_goals.py --calories 2100 --protein 180 --carbs 220 --fat 65
+scripts/set_goals.py --calories 1800 --protein 120 --carbs 195 --fat 60 \
+  --weight 80 --tdee 2400 --calculation-method mifflin_st_jeor+garmin
   ↓
 POST /api/v1/goals → updates goals/current.json
   ↓

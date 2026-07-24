@@ -87,6 +87,7 @@ Each data concern has **exactly one owning module**. Never duplicate logic.
 | LLM food analysis        | `api/shared/vision.py`                  | Azure OpenAI vision + NLP food parsing                      |
 | Nutrition read CLI       | `scripts/read_nutrition.py`             | External Agent reads combined nutrition data                |
 | Goal setting CLI         | `scripts/set_goals.py`                  | External Agent sets weekly nutrition goals                  |
+| Goal audit CLI           | `scripts/audit_nutrition_goals.py`      | Audits missing, stale, or inconsistent per-user goals       |
 | Summary publishing CLI   | `scripts/publish_summary.py`            | Push summaries (with report_markdown) to API                |
 | Rec status read CLI      | `scripts/read_recommendation_status.py` | Agent reads recommendation adoption status                  |
 | Timeline event CLI       | `scripts/add_timeline_event.py`         | Agent adds health timeline events                           |
@@ -103,6 +104,37 @@ Each data concern has **exactly one owning module**. Never duplicate logic.
 - Write reports to `data/users/<user-id>/reports/YYYY-MM-DD.md`.
 - Publish with `scripts/publish_summary.py --user-id <oid> --date YYYY-MM-DD`.
 - Identical repeated publishes are idempotent and must not send a second push.
+
+### Multi-User Nutrition Goal Lifecycle
+
+- The app never fabricates a calorie or macro target. A missing goal remains
+	explicit until calculation inputs are available.
+- Required calculation inputs are date of birth/age, sex, height, current
+	weight, explicit goal, sufficient activity/TDEE context, and relevant
+	medical context. Onboarding does not currently collect weight, so it must not
+	create a default goal; first Garmin/manual weight plus a health or nutrition
+	review completes the initial calculation.
+- Every weekly review, daily check, and meal-plan workflow reads
+	`nutrition_goal_audit` from the immutable packet. It keeps `valid` unchanged,
+	recalculates `missing/stale/inconsistent`, and leaves
+	`missing_profile_inputs` or `needs_medical_review` explicitly unresolved.
+- A goal is stale when it lacks calculation provenance, is older than 35 days,
+	weight changed by at least 3% or 5 kg (whichever occurs first), or median
+	Garmin TDEE changed by at least 10% with at least 7 valid days. Goal,
+	medical/surgery, relevant medication, symptom, or unexpected weight-trend
+	changes also require specialist review.
+- `nutrition-coach.agent.md` is the SSOT for BMR/TDEE, protein reference weight,
+	medical safeguards, and macro calculations. Do not duplicate or replace its
+	policy in prompts.
+- Persist agent-calculated goals only with
+	`scripts/set_goals.py --user-id <oid> ... --weight <kg> --tdee <kcal>`.
+	The CLI enforces macro-calorie consistency and records calculation
+	provenance. Rebuild the same user's packet and verify exact stored values and
+	`nutrition_goal_status=valid` after every write.
+- Audit all registered users regularly and after onboarding/profile changes:
+	`python scripts/audit_nutrition_goals.py --all`. Exit code `0` means all
+	goals are valid; exit code `2` means at least one user needs calculation,
+	missing inputs, medical review, or correction. The audit never writes data.
 
 ### 4. Agent Memory Protocol
 

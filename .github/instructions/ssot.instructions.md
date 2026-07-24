@@ -24,6 +24,8 @@ Each data concern has **exactly one owning module**. Never duplicate logic.
 | LLM food analysis        | `api/shared/vision.py`         | Azure OpenAI vision + NLP food parsing        |
 | Nutrition read CLI       | `scripts/read_nutrition.py`    | External Agent reads combined nutrition data  |
 | Goal setting CLI         | `scripts/set_goals.py`         | External Agent sets weekly nutrition goals    |
+| Goal lifecycle audit     | `scripts/audit_nutrition_goals.py` | Missing/stale/inconsistent goal classification |
+| Goal calculation policy  | `.github/agents/nutrition-coach.agent.md` | BMR/TDEE, macros, safeguards, recalculation rules |
 
 ## Rules
 

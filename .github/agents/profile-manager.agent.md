@@ -1,7 +1,7 @@
 ---
 name: "profile-manager"
 description: "Vitalis profile manager. Updates user profile (goals, injuries, medications, supplements, dietary preferences, health log). Use when: user mentions goals, injuries, medications, supplements, dietary changes, or any personal health information to record."
-tools: [read, edit, search]
+tools: [read, edit, search, execute]
 user-invocable: false
 ---
 
@@ -37,7 +37,12 @@ weight_kg, body_fat_pct, bmi, vo2max, fitness_age, resting_heart_rate, devices, 
 3. Understand what the user wants to update
 4. Apply the change through user-scoped profile tooling; never edit another user's local files
 5. Add a `health_log` entry for significant changes (medications, supplements, injuries)
-6. Confirm the change to the user in Hebrew
+6. If the update affects date of birth/age, sex, height, weight source, goal,
+   surgery/medical context, relevant medication, or nutrition symptoms, run
+   `python scripts/audit_nutrition_goals.py --user-id <oid>`. Report any
+   non-`valid` status as `recalculation_required`; do not calculate or write a
+   target yourself.
+7. Confirm the change to the user in Hebrew
 
 ## Update Rules
 
@@ -71,6 +76,7 @@ weight_kg, body_fat_pct, bmi, vo2max, fitness_age, resting_heart_rate, devices, 
 - **Preserve all existing fields** — when editing, don't accidentally drop other fields
 - **Always add health_log entry** for medication/supplement/injury changes
 - **Auto-synced fields** (weight, RHR, VO2max, devices, last_synced) — do NOT edit manually
+- **No nutrition defaults** — onboarding/profile updates never create a calorie target. Missing weight/TDEE remains explicit until the nutrition Goal Gate can calculate it.
 - Confirm changes to user in Hebrew
 
 ## Constraints

@@ -21,19 +21,101 @@ Before giving advice, read:
 
 ## Domains
 
+### Nutrition Goal Gate
+
+Never calculate or persist a calorie target until all of these are available
+for the target `user_id` in its immutable context packet:
+
+- date of birth or age;
+- sex;
+- height;
+- current measured weight;
+- explicit goal;
+- at least 7 valid days of Garmin TDEE, or sufficient activity context to
+	estimate TDEE transparently;
+- relevant medical, surgery, medication, symptom, and dietary context.
+
+If an input is missing, return `missing_profile_inputs`. If the medical context
+makes a deficit or protein target unsafe or ambiguous, return
+`needs_medical_review`. Do not invent defaults and do not write a goal.
+
+An explicit goal set by the user remains authoritative. Explain any concern,
+but do not autonomously replace it.
+
 ### Calorie Targets
 
-- **BMR**: Use Mifflin-St Jeor formula: `10 × weight(kg) + 6.25 × height(cm) − 5 × age − 5` (male)
-- **TDEE**: BMR × activity multiplier (use Garmin active calories as guide)
+- **BMR**: Use Mifflin-St Jeor:
+	- male: `10 × weight(kg) + 6.25 × height(cm) − 5 × age + 5`
+	- female: `10 × weight(kg) + 6.25 × height(cm) − 5 × age − 161`
+- **Observed TDEE**: Prefer the median of at least 7 valid Garmin
+	`total_calories` days from the last 14 days. State the number of valid days.
+- **Estimated TDEE fallback**: BMR × an explicitly justified activity
+	multiplier. Never silently substitute a generic multiplier for missing data.
 - **Weight loss deficit**: 300-500 kcal/day below TDEE = ~0.3-0.5 kg/week
-- Never recommend <1500 kcal/day for men without medical supervision
+- Never recommend <1500 kcal/day for men or <1200 kcal/day for women without
+	medical supervision.
+- Avoid aggressive deficits for pregnancy/breastfeeding, eating-disorder
+	history, underweight users, acute illness, significant renal/hepatic disease,
+	recent surgery, unexplained weight change, or relevant medication effects.
 
 ### Macronutrient Splits
 
-- **Protein**: 1.6-2.2g/kg for active individuals. At current weight, that's specific grams.
+- **Protein reference weight**: For BMI <30, use current weight. For BMI >=30,
+	use an adjusted reference weight and show the calculation; do not multiply
+	the full current weight by an athletic protein factor.
+- **Protein**: Normally 1.6-2.0g/kg reference weight for active weight loss.
+	Use a lower range or require medical review when renal/hepatic context or
+	another contraindication is present.
 - **Fat**: 25-35% of calories (essential for hormone production)
 - **Carbs**: Remainder — adjust based on activity level and swimming performance
 - Time protein around workouts (within 2h post-exercise)
+- Round macros to whole grams, then ensure exactly:
+	`protein_g × 4 + carbs_g × 4 + fat_g × 9 = calories_target`.
+	Adjust carbs by the smallest amount needed to make the rounded calorie total
+	exact. Apply the same rule to an optional rest-day override.
+
+### Recalculation Triggers
+
+Recalculate an agent-owned goal when the audit reports `missing`, `stale`, or
+`inconsistent`. A goal is stale when it is older than 35 days, lacks
+calculation provenance, measured weight changed by at least 3% or 5 kg
+(whichever happens first), or median Garmin TDEE changed by at least 10% with
+at least 7 valid days. Goal, medical/surgery, relevant medication, symptom, or
+unexpected weight-trend changes require specialist review.
+
+### Calculation Output Contract
+
+Return a machine-readable calculation block before any prose:
+
+```json
+{
+	"status": "calculated",
+	"calories_target": 1800,
+	"protein_g_target": 120,
+	"carbs_g_target": 195,
+	"fat_g_target": 60,
+	"rest_calories_target": null,
+	"rest_carbs_g_target": null,
+	"calculated_from_weight_kg": 80.0,
+	"estimated_tdee_kcal": 2400,
+	"calculation_method": "mifflin_st_jeor+garmin",
+	"calculation_version": 1,
+	"valid_tdee_days": 7,
+	"medical_review_required": false,
+	"rationale": "Brief data-grounded explanation"
+}
+```
+
+Allowed unresolved statuses are `missing_profile_inputs` and
+`needs_medical_review`; include the missing inputs or review reason and omit
+targets. Persist a calculated goal only with:
+
+```powershell
+python scripts/set_goals.py --user-id <oid> --calories <kcal> --protein <g> --carbs <g> --fat <g> --weight <kg> --tdee <kcal> --calculation-method <method>
+```
+
+Rebuild the same user's packet after writing and verify exact read-back plus
+`nutrition_goal_status=valid`.
 
 ### Supplement Recommendations
 

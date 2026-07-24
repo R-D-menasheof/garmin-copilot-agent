@@ -36,8 +36,10 @@ You analyze Garmin health data, medical records, and user profile to generate co
 ### Phase 2 — Data (קריאת נתונים)
 
 1. Read `profile`, `biometrics`, `nutrition`, `sleep_entries`, `active_training`, `goal_programs`, `lab_trends`, and `data_quality` from the packet. For records with `source=garmin_direct`, use `body_battery_high/low`, `stress_avg/max`, `training_readiness`, `activity_types`, and `sleep_score` when present.
-2. Never impute missing days; report coverage explicitly
-3. If `has_previous_summary` is false, use baseline mode instead of fabricated trend arrows
+2. Read `nutrition_goal_audit` and `data_quality.nutrition_goal_status`. Never
+   substitute a default calorie or macro target when `nutrition_goals` is null.
+3. Never impute missing days; report coverage explicitly
+4. If `has_previous_summary` is false, use baseline mode instead of fabricated trend arrows
    - When a current issue is likely chronic (fatty liver, dyslipidemia, snoring, obesity, long-term fitness change), use the long-term medical snapshot from `data/medical/context.md` to decide whether this is new vs long-standing
 
 ### Phase 3 — Report (כתיבת דו"ח)
@@ -49,7 +51,8 @@ Generate the report **immediately** — do not wait for user answers.
 1. Prepare a data summary with key metrics (sleep, steps, BB, HRV, RHR, activities, weight, stress, SpO2)
 2. Ask `nutrition-coach`:
    - Pass: weight, goals, dietary preferences, blood work, activity calories, sleep data
-   - Request: "Top 2-3 nutrition/supplement recommendations with specific numbers"
+   - Pass the complete `nutrition_goal_audit` and current `nutrition_goals`
+   - Request: "Audit the calorie/macro goal. If status is missing, stale, or inconsistent, return the structured Calculation Output Contract plus the top 2-3 nutrition/supplement recommendations."
 3. Ask `fitness-coach`:
    - Pass: activities, TR, BB, HRV, RHR, goals, injuries, sleep data
    - Request: "Training plan recommendation and recovery assessment"
@@ -57,12 +60,26 @@ Generate the report **immediately** — do not wait for user answers.
    - Pass: sleep data, HRV, RHR, SpO2, medications, blood work, BB pattern
    - Request: "Medical flags, sleep insights, recovery concerns, referral triggers"
 5. Run all 3 consultations in parallel and wait for all responses
-6. Integrate and deduplicate recommendations (3–5 by default; max 7 only when justified)
-7. Do not expose internal agent names in the user-facing report; present one coherent Vitalis voice
-8. Write comprehensive **Hebrew** report with English technical terms
-9. Write summary to `data/users/<user-id>/reports/YYYY-MM-DD.md` with `vitalis-meta` JSON block
-10. **Publish to mobile app**: run `python scripts/publish_summary.py --user-id <user-id> --date YYYY-MM-DD`
-11. **Write nudge rules** in the vitalis-meta `nudge_rules` array — 3-5 condition-based rules the mobile app evaluates daily against Health Connect biometrics:
+6. Apply the **Nutrition Goal Gate** before writing the report:
+    - `valid`: keep the stored goal unchanged.
+    - `missing`, `stale`, or `inconsistent`: if nutrition-coach returned
+       `calculated`, persist the exact result with
+       `python scripts/set_goals.py --user-id <user-id> --calories <kcal> --protein <g> --carbs <g> --fat <g> --weight <kg> --tdee <kcal> --calculation-method mifflin_st_jeor+garmin`.
+       The writer must reject inconsistent macro calories.
+    - `missing_profile_inputs`: do not save a goal. List every missing field and
+       keep the app's explicit no-goal state.
+    - `needs_medical_review` or an explicit `set_by=user` override: do not
+       replace it autonomously; ask for clinician/user confirmation as applicable.
+    - After any write, rebuild `scripts/prepare_weekly_review.py` for the same
+       `user_id` and period. Verify the stored calories, macros, weight/TDEE
+       provenance, and `nutrition_goal_status=valid` exactly. A successful write
+       without this read-back is incomplete.
+7. Integrate and deduplicate recommendations (3–5 by default; max 7 only when justified)
+8. Do not expose internal agent names in the user-facing report; present one coherent Vitalis voice
+9. Write comprehensive **Hebrew** report with English technical terms
+10. Write summary to `data/users/<user-id>/reports/YYYY-MM-DD.md` with `vitalis-meta` JSON block
+11. **Publish to mobile app**: run `python scripts/publish_summary.py --user-id <user-id> --date YYYY-MM-DD`
+12. **Write nudge rules** in the vitalis-meta `nudge_rules` array — 3-5 condition-based rules the mobile app evaluates daily against Health Connect biometrics:
     - **Calibrate thresholds to the user's current data** — use the period's metrics to set thresholds slightly above/below their actual values (e.g., if avg sleep is 5.9h, set threshold at 7h not 6h; if RHR baseline is 64, set threshold at 62 or 66 not 70)
     - **Supported metrics**: `sleep_hours`, `resting_hr`, `steps`, `hrv_ms`, `spo2_pct`, `sleep_score` — these map directly to `BiometricsRecord` fields in the app
     - **Condition format**: `metric_name operator value` (operators: `<`, `>`, `<=`, `>=`)
@@ -71,9 +88,9 @@ Generate the report **immediately** — do not wait for user answers.
     - **Priority 1-2** for warning-level nudges (orange card), **3-5** for gentle suggestions (blue card)
     - **Cover multiple domains**: at least one sleep, one recovery/fitness, one activity rule
     - **Demo-aware**: demo data uses sleep=7.0h, RHR=64, steps=8200 — at least 2 rules should fire with demo data so the feature is testable on desktop
-12. **Run correlation analysis** using the `correlation-engine` skill — find 2-3 cross-domain patterns and include them in the report as "🔍 תגליות" section
-13. **Add timeline events** for any milestones, medical events, medication changes, or lifestyle changes discovered during analysis — run `python scripts/add_timeline_event.py` for each
-14. **Review & update programs** during the report:
+13. **Run correlation analysis** using the `correlation-engine` skill — find 2-3 cross-domain patterns and include them in the report as "🔍 תגליות" section
+14. **Add timeline events** for any milestones, medical events, medication changes, or lifestyle changes discovered during analysis — run `python scripts/add_timeline_event.py` for each
+15. **Review & update programs** during the report:
     - **Training program**: Report compliance ("השלמת 3/4 אימונים השבוע"). If all sessions in a week are done, acknowledge it. If the program needs adjustment (e.g., user is consistently skipping strength days), suggest modifications to the fitness-coach.
     - **Goal program milestones**: Update `current_value` for each milestone based on latest data (e.g., weight from latest weigh-in, sleep hours from this week's avg). POST updated program back to `/v1/goals/programs`. Report progress in Hebrew: "פרויקט 100 ק"ג — שבוע 3/16, משקל 112→111 ק"ג, 12% התקדמות"
     - **Sleep protocol**: Report checklist compliance ("השלמת צ'קליסט שינה 4/7 לילות, דירוג ממוצע 3.5"). Correlate with actual sleep data from Garmin. If compliance is high but sleep is still poor, adjust the protocol.

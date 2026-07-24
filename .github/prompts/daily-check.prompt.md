@@ -1,6 +1,6 @@
 ---
 description: "Quick daily health check — sync today's data and compare to recent averages. Brief Hebrew summary."
-agent: "vitalis"
+agent: "Vitalis"
 ---
 
 בדיקת בריאות יומית מהירה עבור `user_id` מפורש. אם לא סופק `user_id`, עצור ובקש אותו; לעולם אל תניח שזה הבעלים.
@@ -17,9 +17,14 @@ agent: "vitalis"
 	```powershell
 	python scripts/prepare_weekly_review.py --user-id <user-id> --days 7
 	```
-3. השווה את אתמול לממוצע האחרון (7 ימים)
-4. סיכום קצר בעברית: מה היה טוב, מה צריך תשומת לב
-5. אל תכתוב סיכום מלא — רק עדכון מהיר
+3. בדוק `nutrition_goal_audit`. אם היעד `valid`, אל תכתוב אותו מחדש. אם הוא
+	`missing/stale/inconsistent`, הפעל את אותו Goal Gate של `/weekly-review`:
+	חישוב nutrition-coach, שמירה עם `scripts/set_goals.py --user-id`, בניית
+	packet מחדש ואימות. אם חסרים inputs או נדרש medical review, אל תשתמש
+	בדיפולט וכתוב את החסם במפורש.
+4. השווה את אתמול לממוצע האחרון (7 ימים)
+5. סיכום קצר בעברית: מה היה טוב, מה צריך תשומת לב
+6. אל תכתוב סיכום מלא — רק עדכון מהיר
 
 **נתוני אפליקציה:** קרא תזונה וביומטריקה רק מתוך ה-packet המבודד של `user_id`; אין להשתמש במפתח legacy של הבעלים למשתמש אחר.
 
